@@ -1,0 +1,41 @@
+
+
+
+
+
+
+
+
+
+
+
+
+#Data
+*.npz
+*.h5
+
+#simvue files
+simvue.ini
+
+#Saved Models
+Models/
+*.pth 
+
+#Vector Graphics Files
+/Vector_Graphics
+*.svg
+*.pdf
+
+*.pyc
+
+#Saved Plot
+Plots/
+*.png
+
+
+#Machine Output files
+*.file
+*.out
+
+#Submission Script
+*.sh
