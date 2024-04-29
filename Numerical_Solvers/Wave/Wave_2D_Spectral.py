@@ -7,7 +7,6 @@ u_tt = c^2 * (u_xx + u_yy)
 
 on [-1, 1]x[-1, 1], t > 0 and Dirichlet BC u=0
 
-Source : http://people.bu.edu/andasari/courses/numericalpython/python.html
 """
 # %%
 import numpy as np
@@ -20,8 +19,15 @@ from tqdm import tqdm
 
 class Wave_2D:
     def __init__(self, Lambda, a, b):
+        """
+        Initialize the Wave_2D class.
 
-        self.N = 30 # Mesh Discretesiation 
+        Args:
+            Lambda (float): Parameter for the initial Gaussian distribution.
+            a (float): x-position of the initial Gaussian.
+            b (float): y-position of the initial Gaussian.
+        """
+        self.N = 100 # Mesh Discretesiation 
         self.x0 = -1.0 # Minimum value of x
         self.xf = 1.0 # maximum value of x
         self.y0 = -1.0 # Minimum value of y 
@@ -35,6 +41,9 @@ class Wave_2D:
         self.intialise()
 
     def intialise(self):
+        """
+        Initialize the grid, time step, and initial conditions.
+        """
         k = np.arange(self.N + 1)
         self.x = np.cos(k*np.pi/self.N) #Creating the x and y discretisations
         self.y = self.x.copy()
@@ -53,6 +62,18 @@ class Wave_2D:
         self.t = np.arange(0,self.tend+self.dt,self.dt)
 
     def solve(self):
+
+        """
+        Solve the 2D wave equation using the spectral method.
+
+        Returns:
+            tuple: A tuple containing the following elements:
+                - xxx (np.ndarray): x-coordinates of the solution. 
+                - yyy (np.ndarray): y-coordinates of the solution. 
+                - self.t (np.ndarray): Time steps of the solution.  
+                - u_sol (np.ndarray): Solution at each time step.
+        """
+
         u_list = []
         tc = 0 
         while tc < self.nstep:
@@ -113,11 +134,14 @@ class Wave_2D:
         return xxx, yyy, self.t, u_sol
 
 # %%
-# Lambda = 20 #
-# a = 0.25 #x-position of initial gaussian
-# b = 0.25 #y-position of initial gaussian 
+#Example of Usage
+Lambda = 20 #Gaussian Peak value
+a = 0.25 #x-position of initial gaussian
+b = 0.25 #y-position of initial gaussian 
 
+#Initialising the Solver
+solver = Wave_2D(Lambda, a , b)
 
-# solver = Wave_2D(Lambda, a , b)
-# xx, yy, t, u_sol = solver.solve() #solution shape -> t, x, y
+#Solving and obtaining the solution. 
+xx, yy, t, u_sol = solver.solve() #solution shape -> t, x, y
 # %%
