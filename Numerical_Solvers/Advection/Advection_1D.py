@@ -25,6 +25,19 @@ import matplotlib.pyplot as plt
 class Advection_1d:
     
     def __init__(self, Nx, Nt, x_min, x_max, t_lim, v, xc):
+       
+        """
+        Initialize the Advection_1d class.
+
+        Args:
+            Nx (int): Number of x-points.
+            Nt (int): Number of time instances.
+            x_min (float): Minimum value of x.
+            x_max (float): Maximum value of x.
+            t_lim (float): Time length.
+            v (float): Advection velocity.
+            xc (float): Center of the Gaussian curve at t=0.
+        """
 
         self.Nx = Nx
         self.x_min = x_min
@@ -48,17 +61,26 @@ class Advection_1d:
         self.u_exact = []
         
     def initializeDomain(self):
+        """
+        Initialize the spatial domain.
+        """
         self.dx = (self.x_max - self.x_min)/self.Nx
         self.x = np.arange(self.x_min-self.dx, self.x_max+(2*self.dx), self.dx)
         
         
     def initializeU(self):
+        """
+        Initialize the solution array U and the next time step array unp1.
+        """
         u0 = np.exp(-200*(self.x-self.xc)**2)
         self.u = u0.copy()
         self.unp1 = u0.copy()
         
         
     def initializeParams(self):
+        """
+        Initialize the simulation parameters and check the CFL condition.
+        """
         self.nsteps = round(self.tmax/self.dt)
         self.alpha = self.v*self.dt/(2*self.dx)
         
@@ -70,6 +92,16 @@ class Advection_1d:
         assert courant_number <= 1, "CFL condition violated"
         
     def solve(self):
+        """
+        Solve the advection equation using the Lax-Friedrichs method.
+
+        Returns:
+            tuple: A tuple containing the following elements:
+                - self.x (np.ndarray): x-coordinates.
+                - np.linspace(0, self.tmax, self.nsteps) (np.ndarray): Time steps.
+                - np.asarray(self.u_sol) (np.ndarray): Solution at each time step.
+                - np.asarray(self.u_exact) (np.ndarray): Exact solution at each time step (Analytical).
+        """
         tc = 0
         
         for i in range(self.nsteps):
