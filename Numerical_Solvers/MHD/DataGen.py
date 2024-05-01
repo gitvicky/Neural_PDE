@@ -14,7 +14,7 @@ from tqdm import tqdm
 from time import time
 from matplotlib import pyplot as plt 
 
-from ConstrainedMHD_numerical import *
+from ConstrainedMHD_2D import *
 
 N = 128
 boxsize = 1.0

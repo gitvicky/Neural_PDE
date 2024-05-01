@@ -3,10 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 """
-Create Your Own Constrained Transport Magnetohydrodynamics Simulation (With Python)
-Philip Mocz (2023), @PMocz
-
-Simulate the Orszag-Tang vortex MHD problem
+Constrained transport MHD simultion modelling the Orszag-Tang vortex simulation. 
+Main Authors: @PMocz
+Mod Authors: @vgopakum
 
 """
 
@@ -439,12 +438,14 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 
 
 # %%
-# N = 128
-# boxsize = 1.0
-# tEnd = 0.5
-# a, b, c = 1.0, 1.0, 1.0
-# rho, u, v, p, bx, by, dt, err = solve(N, boxsize, tEnd, a, b, c)
-# dx = boxsize/N
+#Example usage
+N = 128 #number of grid points
+boxsize = 1.0 #domain size
+tEnd = 0.5 #simulation timescale
+a, b, c = 1.0, 1.0, 1.0 #parameterisation of initial vx, vy, p
+dx = boxsize/N
+
+rho, u, v, p, bx, by, dt, err = solve(N, boxsize, tEnd, a, b, c)
 
 # %%
 

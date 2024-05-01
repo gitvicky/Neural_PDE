@@ -2,7 +2,7 @@
 
 Modularised Spectral Navier Stokes Solver
 
-Code optimised from https://levelup.gitconnected.com/create-your-own-navier-stokes-spectral-method-fluid-simulation-with-python-3f37405524f4
+Code optimised by vgopakum using Philip Mocz Notes
 
 Equations: 
 v_t + (v.nabla) v = nu * nabla^2 v + nabla P
@@ -78,9 +78,9 @@ def apply_dealias(f, dealias):
 
 # %% 
 class Navier_Stokes_2d:
-	def __init__(self, N, t, tEnd, dt, nu, L, a, b):
+	def __init__(self, N, tEnd, dt, nu, L, aa, bb):
 		self.N = N
-		self.t = t
+		self.t = 0
 		self.tEnd = tEnd
 		self.dt = dt 
 		self.nu = nu 
@@ -90,8 +90,8 @@ class Navier_Stokes_2d:
 		self.xlin = self.xlin[0:N]
 		self.xx, self.yy = np.meshgrid(self.xlin, self.xlin)
 
-		self.vx = -np.sin(2*a*np.pi*self.yy)
-		self.vy = np.sin(2*b*np.pi*self.xx*2)
+		self.vx = -np.sin(2*aa*np.pi*self.yy)
+		self.vy = np.sin(2*bb*np.pi*self.xx*2)
 
 		klin = 2*np.pi / self.L * np.arange(-self.N/2, self.N/2)
 		kmax = np.max(klin)
@@ -167,8 +167,17 @@ class Navier_Stokes_2d:
 		return np.asarray(u_list), np.asarray(v_list), np.asarray(p_list), np.asarray(w_list), self.xlin, self.dt, error
 
 # %% 
+#Example Usage
+N = 400 #Number of grid points
+L = 1 #Domain Length
+tStart = 0.0 #Starting time of the simulation
+tEnd = 1.0 #Simulation ending time
+dt = 0.0001 #dt
+nu = 0.001#kinematic viscosity
+aa = 0.5#parametrisation of initial Vx 
+bb = 0.5#parametrisation of initial Vx 
 
-# solver= Navier_Stokes_2d(400, 0.0, 1.0, 0.0001, 0.001, 1) # N, tStart, tEnd, dt, nu, L
-# u, v, p, w, x, t = solver.solve()
+solver= Navier_Stokes_2d(N, tEnd, dt, nu, L, aa, bb)
+u, v, p, w, x, t, err = solver.solve()
 
 # %% 

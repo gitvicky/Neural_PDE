@@ -9,8 +9,7 @@ Equations:
 
 # Domain [0,1] x [0,1]
 
-Writing it out as a class - still work pending. 
-
+STILL PENDING
 """
 
 # %% 
