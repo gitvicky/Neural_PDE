@@ -4,7 +4,7 @@ This repository serves as a base for developing and experimenting across the sur
 
 ## Features
 
-- **Numerical Solvers**: Implements various numerical solvers for PDEs, providing a foundation for generating training data and validating surrogate models.
+- **Numerical Solvers**: Implements various numerical solvers for PDEs, providing a foundation for generating training data and validating surrogate models. 
 - **Neural Network Surrogate Models**: Provides a collection of neural network architectures specifically designed for surrogate modeling of PDEs.
 - **Training Utilities**: Offers a set of utilities to streamline the training process, including data preprocessing, model training, and evaluation.
 - **Uncertainty Quantification**: Includes tools for quantifying and analyzing the uncertainty associated with surrogate models, enabling robust decision-making.
@@ -29,7 +29,6 @@ The Surrogate Modeling Framework enables researchers and practitioners to conduc
 3. **Training and Evaluation**: Utilize the training utilities to train the surrogate models and evaluate their performance using appropriate metrics.
 4. **Uncertainty Quantification**: Apply the UQ tools to assess the uncertainty associated with the surrogate models and make informed decisions.
 5. **Active Learning**: Employ active learning strategies to efficiently acquire informative training data and improve model accuracy.
-6. **Experimentation**: Conduct experiments to compare different surrogate modeling approaches, investigate the impact of various factors, and develop new methods.
 
 ## Contributing
 
