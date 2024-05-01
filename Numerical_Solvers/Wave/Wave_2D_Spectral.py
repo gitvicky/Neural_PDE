@@ -18,25 +18,19 @@ from tqdm import tqdm
  
 
 class Wave_2D:
-    def __init__(self, Lambda, a, b):
-        """
-        Initialize the Wave_2D class.
+    def __init__(self, Nx, Nt, x_min, x_max, t_lim, c, Lambda, aa, bb):
 
-        Args:
-            Lambda (float): Parameter for the initial Gaussian distribution.
-            a (float): x-position of the initial Gaussian.
-            b (float): y-position of the initial Gaussian.
-        """
-        self.N = 100 # Mesh Discretesiation 
-        self.x0 = -1.0 # Minimum value of x
-        self.xf = 1.0 # maximum value of x
-        self.y0 = -1.0 # Minimum value of y 
-        self.yf = 1.0 # Minimum value of y
-        self.tend = 1
+        self.N =  Nx
+        self.x_min = x_min
+        self.x_max = x_max
+        self.y_min = x_min
+        self.y_max = x_max
+        self.tend = t_lim
         self.Lambda = Lambda
-        self.a = a 
-        self.b = b 
-        self.c = 1.0 # Wave Speed <=1.0
+        self.a = aa 
+        self.b = bb 
+        self.c = c # Wave Speed <=1.0
+        assert self.c <= 1, "Unrealistic Wave Speed"
 
         self.intialise()
 
@@ -44,21 +38,18 @@ class Wave_2D:
         """
         Initialize the grid, time step, and initial conditions.
         """
-        k = np.arange(self.N + 1)
+        k = np.arange(self.N + 1)#Wavenumber indexes
         self.x = np.cos(k*np.pi/self.N) #Creating the x and y discretisations
         self.y = self.x.copy()
-        self.xx, self.yy = np.meshgrid(self.x, self.y)
+        self.xx, self.yy = np.meshgrid(self.x, self.y)#Creating the 2D meshgrids
         
-        dt = 6/self.N**2 # dont know why this is taken as dt 
-        plotgap = round((1/3)/dt) 
-        self.dt = (1/3)/plotgap
+        self.dt = 6/self.N**2
         
         #Initial Conditions 
         self.vv = np.exp(-self.Lambda*((self.xx-self.a)**2 + (self.yy-self.b)**2))
         self.vvold = self.vv.copy()
         
-        
-        self.nstep = round(3*plotgap+1) * self.tend
+        self.nstep = int(self.tend / self.dt) + 1
         self.t = np.arange(0,self.tend+self.dt,self.dt)
 
     def solve(self):
@@ -78,10 +69,15 @@ class Wave_2D:
         tc = 0 
         while tc < self.nstep:
 
-            xxx = np.arange(self.x0, self.xf+1/16, 1/16)
-            yyy = np.arange(self.y0, self.yf+1/16, 1/16)
+            xxx = np.arange(self.x_min, self.x_max+1/16, 1/16)
+            yyy = np.arange(self.y_min, self.y_max+1/16, 1/16)
+
             vvv = interpolate.interp2d(self.x, self.y, self.vv, kind='cubic')
             Z = vvv(xxx, yyy)
+
+            #Need to fix this to be in line with the latest scipy versions
+            # vvv = interpolate.RegularGridInterpolator((self.x, self.y), self.vv, method='cubic')
+            # Z = vvv((xxx, yyy))
                 
             uxx = np.zeros((self.N+1, self.N+1))
             uyy = np.zeros((self.N+1, self.N+1))
@@ -135,13 +131,22 @@ class Wave_2D:
 
 # %%
 #Example of Usage
-Lambda = 20 #Gaussian Peak value
-a = 0.25 #x-position of initial gaussian
-b = 0.25 #y-position of initial gaussian 
+Nx = 30 # Mesh Discretesiation 
+Nt = 100 
+x_min = -1.0 # Minimum value of x
+x_max = 1.0 # maximum value of x
+y_min = -1.0 # Minimum value of y 
+y_max = 1.0 # Minimum value of y
+tend = 1
+Lambda = 20
+aa = 0.25
+bb = 0.25
+c = 1.0 # Wave Speed <=1.0
 
 #Initialising the Solver
-solver = Wave_2D(Lambda, a , b)
+solver = Wave_2D(Nx, Nt, x_min, x_max, tend, c, Lambda, aa , bb)
 
 #Solving and obtaining the solution. 
 xx, yy, t, u_sol = solver.solve() #solution shape -> t, x, y
 # %%
+
