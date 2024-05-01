@@ -1,4 +1,4 @@
-# Surrogate Modeling Framework
+# Neural-PDEs: Surrogate Modeling Framework
 
 This repository serves as a base for developing and experimenting across the surrogate model ecosystem, particularly neural network-based surrogate models for partial differential equations (PDEs). The framework includes numerical solvers, neural network architectures, training utilities, and uncertainty quantification (UQ) tools to facilitate the development and analysis of Neural-PDE surrogate models.
 
