@@ -1,15 +1,4 @@
 
-
-
-
-
-
-
-
-
-
-
-
 #Data
 *.npz
 *.h5
@@ -18,7 +7,7 @@
 simvue.ini
 
 #Saved Models
-Models/
+Weights/
 *.pth 
 
 #Vector Graphics Files
