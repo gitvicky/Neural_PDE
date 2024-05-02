@@ -6,13 +6,14 @@ Created on 22 Apr, 2024
 
 Multivariate-FNO in 2D
 """
+# %% 
 ################################################################
 # FNO - Code worked and modified with Caltech (Zongyi et al.)
 ################################################################
 import numpy as np 
 import torch 
 import torch.nn as nn 
-import torch.functional as F 
+import torch.nn.functional as F 
 
 import operator
 from functools import reduce
@@ -199,3 +200,4 @@ class FNO_multi(nn.Module):
             c += reduce(operator.mul, list(p.size()))
 
         return c
+# %%
