@@ -16,7 +16,6 @@ import torch.functional as F
 # Normalisation Functions
 ##################################
 
-
 # normalization, pointwise gaussian
 class UnitGaussianNormalizer(object):
     def __init__(self, x, eps=0.01):
@@ -418,7 +417,6 @@ class HsLoss(object):
             loss = loss / (k+1)
 
         return loss
-    
 
 
 # Fully Connected Network or a Multi-Layer Perceptron

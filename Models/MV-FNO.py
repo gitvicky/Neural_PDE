@@ -71,7 +71,7 @@ class MLP(nn.Module):
         super(MLP, self).__init__()
         self.mlp1 = nn.Conv3d(in_channels, mid_channels, 1)
         self.mlp2 = nn.Conv3d(mid_channels, out_channels, 1)
-        self.activation = torch.nn.GELU()
+        self.activation = F.gelu
 
     def forward(self, x):
         x = self.mlp1(x)
@@ -94,7 +94,7 @@ class FNO2d(nn.Module):
         self.w = nn.Conv3d(self.width, self.width, 1)
         self.b = nn.Conv3d(2, self.width, 1)
 
-        self.activation = torch.nn.GELU()
+        self.activation = F.gelu
 
     def forward(self, x, grid):
         x1 = self.conv(x)
@@ -105,6 +105,7 @@ class FNO2d(nn.Module):
         x = self.activation(x)
         return x
 
+# %%
 
 class FNO_multi(nn.Module):
     def __init__(self, T_in, step, modes1, modes2, num_vars, width_vars, width_time, grid='arbitrary'):
@@ -132,7 +133,7 @@ class FNO_multi(nn.Module):
         self.width_time = width_time
         self.grid = grid
 
-        self.fc0_time = nn.Linear(self.T_in + 2, self.width_time) #+2 for the spatial discretisations
+        self.fc0_time = nn.Linear(self.T_in + 2, self.width_time) #+2 for the spatial discretisations in 2D
 
         # self.padding = 8 # pad the domain if input is non-periodic
 
