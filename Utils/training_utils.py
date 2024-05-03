@@ -4,7 +4,7 @@
 Created on 2 May 2024 
 @author: @vgopakum
 
-Training and Inference pipelines for Neural-PDE solvers with autoregresive temporal rollouts. 
+Training and Inference pipelines for Neural-PDE solvers with autoregresive temporal rollouts. Data shape - [Batch, variables, Nx, Ny, Nt]
 !!!!!!! currently devised for the FNOs but should be suited to work for U-Nets as well - basically how the time is kept together. 
 """
 
@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def train_one_epoch(model, train_loader, test_loader, loss_func, optimizer, step, T_out):
+def train_one_epoch_ar(model, train_loader, test_loader, loss_func, optimizer, step, T_out):
     model.train()
     t1 = default_timer()
     train_l2_step = 0
@@ -84,10 +84,11 @@ def train_one_epoch(model, train_loader, test_loader, loss_func, optimizer, step
 
     return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
 
+
 ################################################################
 # Validation / Inference - Autoregressive Temporal rollouts. 
 ################################################################
-def validation(model, test_a, test_u, step, T_out):
+def validation_ar(model, test_a, test_u, step, T_out):
     test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u), batch_size=1,
                                             shuffle=False)
     pred_set = torch.zeros(test_u.shape)
