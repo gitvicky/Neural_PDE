@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on 6 Jan 2023
-@author: vgopakum
+author: @vgopakum
 Utilities required for training neural-pde surrogate models.
 """
 import numpy as np 

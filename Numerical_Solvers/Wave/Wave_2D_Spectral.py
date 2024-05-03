@@ -18,14 +18,14 @@ from tqdm import tqdm
  
 
 class Wave_2D:
-    def __init__(self, Nx, Nt, x_min, x_max, t_lim, c, Lambda, aa, bb):
+    def __init__(self, Nx, Nt, x_min, x_max, t_end, c, Lambda, aa, bb):
 
         self.N =  Nx
         self.x_min = x_min
         self.x_max = x_max
         self.y_min = x_min
         self.y_max = x_max
-        self.tend = t_lim
+        self.tend = t_end
         self.Lambda = Lambda
         self.a = aa 
         self.b = bb 

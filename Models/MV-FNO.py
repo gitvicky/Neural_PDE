@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on 22 Apr, 2024
-@author: vgopakum, zongyli
+author: @vgopakum, @zongyli
 
 Multivariate-FNO in 2D
 """

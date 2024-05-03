@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on 22 Apr, 2024
-@author: vsitzmann, vgopakum
+author: @vsitzmann, @vgopakum
 
 SiReN - Coordinate based MLP using sinusodial activation functions to dampen the spectral bias. 
 """

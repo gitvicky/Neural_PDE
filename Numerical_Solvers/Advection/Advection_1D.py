@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 
 class Advection_1d:
     
-    def __init__(self, Nx, Nt, x_min, x_max, t_lim, v, xc):
+    def __init__(self, Nx, Nt, x_min, x_max, t_end, v, xc):
        
         """
         Initialize the Advection_1d class.
@@ -34,7 +34,7 @@ class Advection_1d:
             Nt (int): Number of time instances.
             x_min (float): Minimum value of x.
             x_max (float): Maximum value of x.
-            t_lim (float): Time length.
+            t_end (float): Time length.
             v (float): Advection velocity.
             xc (float): Center of the Gaussian curve at t=0.
         """
@@ -46,9 +46,9 @@ class Advection_1d:
         self.x = np.arange(x_min, x_max, self.dx)
 
         self.t_length = Nt
-        self.dt = (t_lim)/self.t_length
-        self.t = np.arange(0, t_lim, self.dt)
-        self.tmax = t_lim
+        self.dt = (t_end)/self.t_length
+        self.t = np.arange(0, t_end, self.dt)
+        self.tmax = t_end
     
         self.v = v # velocity
         self.xc = xc #position of the gaussian
@@ -132,10 +132,10 @@ if __name__ == "__main__":
     Nx = 100 #Number of x-points
     Nt = 50 #Number of time instances 
     x_min, x_max = 0.0, 2.0 #X min and max
-    t_lim = 0.5 #time length
+    t_end = 0.5 #time length
     v = 1 #Advection velocity 
     xc = 0.25 #Centre of Gaussian 
     
-    sim = Advection_1d(Nx, Nt, x_min, x_max, t_lim, v, xc) 
+    sim = Advection_1d(Nx, Nt, x_min, x_max, t_end, v, xc) 
     x, t, u_sol, u_exact = sim.solve()
     v = 1 

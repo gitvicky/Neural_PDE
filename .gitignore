@@ -1,5 +1,6 @@
 
 #Data
+Data/
 *.npz
 *.h5
 

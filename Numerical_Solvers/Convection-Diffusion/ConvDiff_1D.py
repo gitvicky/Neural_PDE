@@ -26,7 +26,7 @@ from sympy import *
 
 class Conv_Diff_1d:
     
-    def __init__(self, Nx, Nt, x_min, x_max, t_lim, D_damp, c, mu, sigma):
+    def __init__(self, Nx, Nt, x_min, x_max, t_end, D_damp, c, mu, sigma):
         """
     Initialize the Conv_Diff_1d class.
 
@@ -35,7 +35,7 @@ class Conv_Diff_1d:
         Nt (int): Numerical discretiation in time. 
         x_min (float): The minimum value of the spatial domain.
         x_max (float): The maximum value of the spatial domain.
-        t_lim (float): The maximum value of the time domain.
+        t_end (float): The maximum value of the time domain.
         D_damp (float): The damping coefficient for the diffusion term (sin(x)/D_damp).
         c (float): The velocity of the convection term.
         mu (float): The mean value for the initial condition.
@@ -46,8 +46,8 @@ class Conv_Diff_1d:
         self.x = np.arange(x_min, x_max, self.dx)
 
         self.t_length = Nt
-        self.dt = (t_lim)/self.t_length
-        self.t = np.arange(0, t_lim, self.dt)
+        self.dt = (t_end)/self.t_length
+        self.t = np.arange(0, t_end, self.dt)
         self.n_itim = Nt
 
         self.D_damp = D_damp
@@ -129,12 +129,12 @@ if __name__ == "__main__":
     Nt = 5000 #Number of time instances 
     x_min = 0.0 #Min of X-range 
     x_max = 10.0 #Max of X-range 
-    t_lim = 2.5 #Time Maximum
+    t_end = 2.5 #Time Maximum
     D_damp = 2*np.pi #Damping Factor
     c = 0.5 #Convection velocity 
     mu = 5 #Gaussian mean
     sigma = 0.5 #Gaussian Variance
 
-    sim = Conv_Diff_1d(Nx, Nt, x_min, x_max, t_lim, D_damp, c, mu, sigma) 
+    sim = Conv_Diff_1d(Nx, Nt, x_min, x_max, t_end, D_damp, c, mu, sigma) 
     u_sol, D, D_x = sim.solve()
 # %%

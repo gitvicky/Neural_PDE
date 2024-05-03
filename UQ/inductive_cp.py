@@ -3,7 +3,7 @@
 """
 Created on 24 February, 2023
 
-@author: vgopakum, agray, lzanisi
+author: @vgopakum, @agray, @lzanisi
 
 Utilities for performing marginal infuctive CP over tensor grids
 
