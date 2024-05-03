@@ -118,4 +118,4 @@ def validation_ar(model, test_a, test_u, step, T_out):
         MSE_error = (pred_set - test_u).pow(2).mean()
         MAE_error = torch.abs(pred_set - test_u).mean()
 
-    return MSE_error, MAE_error
+    return pred_set, MSE_error, MAE_error
