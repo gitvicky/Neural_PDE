@@ -30,8 +30,9 @@ configuration = {"Case": 'Wave',
                  }
 
 # %%
+import os
 from simvue import Run
-run = Run(mode='disabled')
+run = Run(mode='online')
 run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'Tests', 'AR'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
@@ -43,7 +44,6 @@ run.update_metadata({'Git Hash': sha})
 
 # %% 
 #Importing the necessary packages
-import os 
 import sys
 import numpy as np
 from tqdm import tqdm 
