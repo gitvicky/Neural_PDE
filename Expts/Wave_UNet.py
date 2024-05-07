@@ -92,7 +92,7 @@ u = u.permute(0, 2, 3, 1)
 u = torch.unsqueeze(u, 1)
 # %% 
 ntrain = 800
-ntest = 300
+ntest = 200
 S = 33 #Grid Size
 
 #Extracting configuration files
