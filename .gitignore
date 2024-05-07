@@ -1,4 +1,7 @@
 
+#Package Inits
+__init__.py
+
 #Data
 Data/
 *.npz

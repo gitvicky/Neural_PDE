@@ -43,6 +43,8 @@ run.update_metadata({'Git Hash': sha})
 
 # %% 
 #Importing the necessary packages
+import os 
+import sys
 import numpy as np
 from tqdm import tqdm 
 import torch
@@ -52,12 +54,17 @@ import time
 from timeit import default_timer
 from tqdm import tqdm 
 
+#Adding the NPDE package to the system python path
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
+# %%
 #Importing the models and utilities. 
-from ..Models import FNO
-from ..Utils import utils, training_utils
+from NeuralPDE.Models.FNO import *
+from NeuralPDE.Utils.processing_utils import * 
+from NeuralPDE.Utils.training_utils import * 
+
 # %% 
 #Settung up locations. 
-import os 
 file_loc = os.getcwd()
 data_loc = os.path.dirname(os.getcwd()) + '/Data'
 model_loc = file_loc + '/Weights'
@@ -82,7 +89,7 @@ y = data['y'].astype(np.float32)
 t = data['t'].astype(np.float32)
 u = torch.from_numpy(u_sol)
 u = u.permute(0, 2, 3, 1)
-
+u = torch.unsqueeze(u, 1)
 # %% 
 ntrain = 800
 ntest = 300
@@ -100,11 +107,11 @@ num_vars = configuration['Variables']
 batch_size = configuration['Batch Size']
 
 #Setting up train and test
-train_a = u[:ntrain,:,:,:T_in]
-train_u = u[:ntrain,:,:,T_in:T+T_in]
+train_a = u[:ntrain,:,:,:,:T_in]
+train_u = u[:ntrain,:,:,:,T_in:T_out+T_in]
 
-test_a = u[-ntest:,:,:,:T_in]
-test_u = u[-ntest:,:,:,T_in:T+T_in]
+test_a = u[-ntest:,:,:,:,:T_in]
+test_u = u[-ntest:,:,:,:,T_in:T_out+T_in]
 
 print("Training Input: " + str(train_a.shape))
 print("Training Output: " + str(train_u.shape))

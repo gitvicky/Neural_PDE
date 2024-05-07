@@ -112,7 +112,7 @@ def validation_ar(model, test_a, test_u, step, T_out):
             t2 = default_timer()
             pred_set[index] = pred
             index += 1
-            print(t2 - t1)
+            # print(t2 - t1)
 
         # Performance Metrics
         MSE_error = (pred_set - test_u).pow(2).mean()
