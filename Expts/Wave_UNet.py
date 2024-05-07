@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FNO modelled over the 2D Wave Equation auto-regressively 
+U-Net modelled over the 2D Wave Equation auto-regressively 
 
 """
 
 # %%
 configuration = {"Case": 'Wave',
                  "Field": 'u',
-                 "Model": 'FNO',
+                 "Model": 'UNet',
                  "Epochs": 500,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
@@ -33,7 +33,7 @@ configuration = {"Case": 'Wave',
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'Tests', 'AR'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'U-Net', 'Tests', 'AR'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
 run.save(os.path.abspath(__file__), 'code')
@@ -59,7 +59,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
 # %%
 #Importing the models and utilities. 
-from NeuralPDE.Models.FNO import *
+from NeuralPDE.Models.U_Net import *
 from NeuralPDE.Utils.processing_utils import * 
 from NeuralPDE.Utils.training_utils import * 
 
@@ -150,7 +150,7 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = FNO_multi(T_in, step, modes, modes, num_vars, width_vars, width_time)
+model = UNet2d(in_channels=T_in, out_channels=step, init_features=width_time, num_vars=configuration['Variables'])
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})
@@ -254,7 +254,7 @@ u_field = pred_set[idx]
 
 ax = fig.add_subplot(2, 3, 4)
 pcm = ax.imshow(u_field[0, :, :, 0], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_1, vmax=v_max_1)
-ax.set_ylabel('FNO')
+ax.set_ylabel('U-Net')
 
 fig.colorbar(pcm, pad=0.05)
 

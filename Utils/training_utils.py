@@ -38,7 +38,7 @@ def train_one_epoch_ar(model, train_loader, test_loader, loss_func, optimizer, s
             #Recon Loss
             loss += loss_func(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
-            #Residual Loss
+            #Residual Loss https://iopscience.iop.org/article/10.1088/1741-4326/ad313a/pdf
             pred_diff = im - xx[..., -step:]
             y_diff = y - y_old
             loss += loss_func(pred_diff.reshape(batch_size, -1), y_diff.reshape(batch_size, -1))
