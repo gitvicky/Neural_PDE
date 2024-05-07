@@ -9,7 +9,7 @@ Siren modelled over the 2D Wave Equation as an Implicit Neural Rep.
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'Siren',
-                 "Epochs": 50,
+                 "Epochs": 500,
                  "Batch Size": 50000,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -206,11 +206,11 @@ run.update_metadata({'Training Time': float(train_time),
 
 #%%
 #Denormalising the predictions
-pred_set = u_normalizer.decode(pred_set_encoded.to(device)).cpu()
+pred_set = u_normalizer.decode(pred_set_encoded.to(device)).cpu().detach().numpy()
 
 # Rearranging the Predictions for Evaluation. 
-test_u = test_u.reshape(ntest, S, S, T_range)
-pred_set = pred_set.reshape(ntest, S, S, T_range)
+test_u = test_u.reshape(ntest, num_vars, S, S, T_range)
+pred_set = pred_set.reshape(ntest, num_vars, S, S, T_range)
 # %% 
 #Plotting performance
 
