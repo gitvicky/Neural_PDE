@@ -14,6 +14,9 @@ import numpy as np
 import torch 
 import torch.nn as nn 
 import torch.functional as F 
+import operator
+from functools import reduce
+from functools import partial
 from collections import OrderedDict
 
 # %% 
@@ -57,7 +60,7 @@ class SineLayer(nn.Module):
     
     
 class Siren(nn.Module):
-    def __init__(self, in_features, hidden_features, hidden_layers, out_features, outermost_linear=False, 
+    def __init__(self, in_features, hidden_features, hidden_layers, out_features, outermost_linear=True, 
                  first_omega_0=30, hidden_omega_0=30.):
         super().__init__()
         
@@ -116,3 +119,15 @@ class Siren(nn.Module):
             activation_count += 1
 
         return activations
+    
+    def count_params(self):
+        c = 0
+        for p in self.parameters():
+            c += reduce(operator.mul, list(p.size()))
+        return c
+# %% 
+#Example Usage
+model = Siren(3, 32, 5, 1)
+ins = torch.randn(100,3)
+outs, coords = model(ins)
+# %%

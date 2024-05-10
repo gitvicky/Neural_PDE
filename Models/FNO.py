@@ -201,3 +201,7 @@ class FNO_multi(nn.Module):
 
         return c
 # %%
+#Example Usage
+model = FNO_multi(T_in=20, step=5, modes1=8, modes2=8, num_vars=1, width_vars=0, width_time=32)
+ins = torch.randn(100,1,64,64,20) #BS, num_vars, Nx, Ny, T_in
+outs = model(ins)

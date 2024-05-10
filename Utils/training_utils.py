@@ -19,9 +19,9 @@ from tqdm import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def train_one_epoch_ar(model, train_loader, test_loader, loss_func, optimizer, step, T_out):
+def train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, step, T_out):
     model.train()
-    t1 = default_timer()
+    # t1 = default_timer()
     train_l2_step = 0
     train_l2_full = 0
     for xx, yy in train_loader:
@@ -80,7 +80,7 @@ def train_one_epoch_ar(model, train_loader, test_loader, loss_func, optimizer, s
                 xx = torch.cat((xx[..., step:], out), dim=-1)
             test_loss += loss_func(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
 
-    t2 = default_timer()
+    # t2 = default_timer()
 
     return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
 
@@ -88,7 +88,7 @@ def train_one_epoch_ar(model, train_loader, test_loader, loss_func, optimizer, s
 ################################################################
 # Validation / Inference - Autoregressive Temporal rollouts. 
 ################################################################
-def validation_ar(model, test_a, test_u, step, T_out):
+def validation_AR(model, test_a, test_u, step, T_out):
     test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u), batch_size=1,
                                             shuffle=False)
     pred_set = torch.zeros(test_u.shape)
@@ -119,3 +119,53 @@ def validation_ar(model, test_a, test_u, step, T_out):
         MAE_error = torch.abs(pred_set - test_u).mean()
 
     return pred_set, MSE_error, MAE_error
+
+# %% 
+
+################################################################
+# Training - Supervised with no roll-outs. 
+################################################################
+
+def train_one_epoch(model, train_loader, test_loader, loss_func, optimizer):
+    model.train()
+    train_loss = 0
+    for xx, yy in train_loader:
+        optimizer.zero_grad()
+        xx = xx.to(device)
+        yy = yy.to(device)
+        batch_size = xx.shape[0]
+
+        im, _ = model(xx)
+        loss = loss_func(im.reshape(batch_size, -1), yy.reshape(batch_size, -1))
+ 
+        loss.backward()
+        # torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
+        optimizer.step()
+
+        train_loss += loss.item()
+    
+
+    # Validation Loop
+    test_loss = 0
+    with torch.no_grad():
+        for xx, yy in test_loader:
+            xx, yy = xx.to(device), yy.to(device)
+            batch_size = xx.shape[0]
+            out, _ = model(xx)
+            test_loss += loss_func(out.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+
+    return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
+
+# %% 
+################################################################
+# Validation / Inference for INR / PINNs 
+################################################################
+def validation(model, test_a, test_u):
+    test_a, test_u = test_a.to(device), test_u.to(device)
+    out, _ = model(test_a)
+
+    # Performance Metrics
+    MSE_error = (out - test_u).pow(2).mean()
+    MAE_error = torch.abs(out - test_u).mean()
+
+    return out, MSE_error, MAE_error

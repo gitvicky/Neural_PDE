@@ -9,7 +9,7 @@ Siren modelled over the 2D Wave Equation as an Implicit Neural Rep.
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'Siren',
-                 "Epochs": 500,
+                 "Epochs": 250,
                  "Batch Size": 50000,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -18,11 +18,12 @@ configuration = {"Case": 'Wave',
                  "Activation": 'GeLU',
                  "Physics Normalisation": 'No',
                  "Normalisation Strategy": 'Min-Max',
-                 "T_range": 80,
+                 "T_range": 80, #Full range of time instances
                  "Layers": 5,                 
                  "Width": 32, 
-                 "Coords": 3,
-                 "Variables":1, 
+                 "Coords": 3, #Number of spatio-temporal coordinates - would form the number of inputs 
+                 "Variables":1, #Number of variables being modelled - would form the number of outputs. 
+                 "Points":int(1e6), #Points sampled for training. 10 percent of that is used for testing. 
                  "Loss Function": 'MSE',
                  "UQ": 'None', #None, Dropout
                  }
@@ -100,6 +101,7 @@ layers = configuration['Layers']
 width = configuration['Width']
 batch_size = configuration['Batch Size']
 T_range = configuration['T_range']
+num_points = configuration["Points"]
 
 #Slicing the fields and setting up the coordinate meshes. 
 t = t[:T_range]
@@ -110,11 +112,20 @@ aa = np.vstack((xx.flatten(), yy.flatten(), tt.flatten() )).T
 uu = u.reshape(u.shape[0], int(u.shape[1]*u.shape[2]*u.shape[3]))
 # %%
 #Setting up train and test
-train_a = torch.tensor(np.tile(aa, (ntrain,1)))
-train_u = uu[:ntrain].flatten().unsqueeze(-1)
+#Splitting based on the simulations
+train_a_sims = torch.tensor(np.tile(aa, (ntrain,1)))
+train_u_sims = uu[:ntrain].flatten().unsqueeze(-1)
 
-test_a = torch.tensor(np.tile(aa, (ntest,1)))
-test_u = uu[-ntest:].flatten().unsqueeze(-1)
+test_a_sims = torch.tensor(np.tile(aa, (ntest,1)))
+test_u_sims = uu[-ntest:].flatten().unsqueeze(-1)
+
+idx = np.random.randint(len(train_a_sims), size=num_points)
+train_a = train_a_sims[idx]
+train_u = train_u_sims[idx]
+
+idx = np.random.randint(len(test_a_sims), size=int(num_points/10))
+test_a = test_a_sims[idx]
+test_u = test_u_sims[idx]
 
 print("Training Input: " + str(train_a.shape))
 print("Training Output: " + str(train_u.shape))
@@ -176,8 +187,8 @@ for ep in range(epochs): #Training Loop - Epochwise
     train_loss, test_loss = train_one_epoch(model, train_loader, test_loader, loss_func, optimizer)
     t2 = default_timer()
 
-    train_loss = train_loss / train_a.shape[0]
-    test_loss = test_loss / test_a.shape[0]
+    train_loss = train_loss / ntrain
+    test_loss = test_loss / ntest
 
     print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 3)}, Test Loss: {round(test_loss,3)}")
     run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
@@ -193,7 +204,10 @@ saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Ca
 torch.save( model.state_dict(), saved_model)
 run.save(saved_model, 'output')
 # %%
-#Validation
+#Validation using the data split simulation-wise. 
+test_a = a_normalizer.encode(test_a_sims)
+test_u = test_u_sims
+test_u_encoded = u_normalizer.encode(test_u_sims)
 pred_set_encoded, mse, mae = validation(model, test_a, test_u_encoded)
 # %%
 print('(MSE) Testing Error: %.3e' % (mse))
