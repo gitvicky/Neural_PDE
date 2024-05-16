@@ -3,6 +3,8 @@
 """
 FNO modelled over the 2D Wave Equation auto-regressively 
 
+Equation: u_tt = D*(u_xx + u_yy), D=1.0
+
 """
 
 # %%

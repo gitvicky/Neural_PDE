@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 """
 Created on 22 Apr, 2024
-@author: vgopakum
+@author: DeepXde
+@modified: vgopakum
 
 DeepOnet
 

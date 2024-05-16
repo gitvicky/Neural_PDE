@@ -1,6 +1,6 @@
 ################################################################
 # MLP - Fully Connected Neural Network with equal width across the network. 
-# Code is not provided but could be rewritten using the FNO as the base framework. 
+# @author: vgopakum
 ################################################################
 
 import torch 

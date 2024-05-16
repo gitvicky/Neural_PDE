@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Siren modelled over the 2D Wave Equation as an Implicit Neural Rep. 
+Siren modelled over the 2D Wave Equation as a PINN.
+
+Equation: u_tt = D*(u_xx + u_yy), D=1.0
 
 """
 
