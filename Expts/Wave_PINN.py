@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Siren modelled over the 2D Wave Equation as an Implicit Neural Rep. 
+Siren modelled over the 2D Wave Equation as a PINN.- rewrite
 
 Equation: u_tt = D*(u_xx + u_yy), D=1.0
 
@@ -77,23 +77,42 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # %%
 ################################################################
-# Loading Data 
+# Loading (Generating) Data 
 ################################################################
 
-# %%
 t1 = default_timer()
-data =  np.load(data_loc + '/Spectral_Wave_data_LHS.npz')
+from Neural_PDE.Numerical_Solvers.Wave import Wave_2D_Spectral
 
-u_sol = data['u'].astype(np.float32)
-x = data['x'].astype(np.float32)
-y = data['y'].astype(np.float32)
-t = data['t'].astype(np.float32)
+#Example of Usage
+Nx = 30 # Mesh Discretesiation 
+Nt = 100 #Max time
+x_min = -1.0 # Minimum value of x
+x_max = 1.0 # maximum value of x
+y_min = -1.0 # Minimum value of y 
+y_max = 1.0 # Minimum value of y
+tend = 1
+Lambda = 20
+aa = 0.25
+bb = 0.25
+c = 1.0 # Wave Speed <=1.0
+
+#Initialising the Solver
+solver = Wave_2D_Spectral.Wave_2D(Nx, Nt, x_min, x_max, tend, c, Lambda, aa , bb)
+
+#Solving and obtaining the solution. 
+x, y, t, u_sol = solver.solve() #solution shape -> t, x, y
+
+# data =  np.load(data_loc + '/Spectral_Wave_data_LHS.npz')
+
+# u_sol = data['u'].astype(np.float32)
+# x = data['x'].astype(np.float32)
+# y = data['y'].astype(np.float32)
+# t = data['t'].astype(np.float32)
 u = torch.from_numpy(u_sol)
-u = u.permute(0, 2, 3, 1)
-
+u = u.permute(1,2,0)
 # %% 
-ntrain = 800
-ntest = 200
+ntrain = 1
+ntest = 1
 S = 33 #Grid Size
 
 #Extracting configuration files
@@ -111,23 +130,24 @@ u = u[...,:T_range]
 xx, yy, tt = np.meshgrid(x, y, t)
 
 aa = np.vstack((xx.flatten(), yy.flatten(), tt.flatten() )).T
-uu = u.reshape(u.shape[0], int(u.shape[1]*u.shape[2]*u.shape[3]))
+uu = u.flatten().unsqueeze(dim=-1)
 # %%
 #Setting up train and test
+tts = 0.8 #test train split
+ntrain = int(tts * len(aa)) 
+ntest = len(aa) - ntrain
 #Splitting based on the simulations
-train_a_sims = torch.tensor(np.tile(aa, (ntrain,1)))
-train_u_sims = uu[:ntrain].flatten().unsqueeze(-1)
 
-test_a_sims = torch.tensor(np.tile(aa, (ntest,1)))
-test_u_sims = uu[-ntest:].flatten().unsqueeze(-1)
+train_index = np.random.choice(len(aa), ntrain, replace=False)
+mask = np.ones(len(aa), dtype=bool)
+mask[train_index.tolist()] = False
+test_index = mask
 
-idx = np.random.randint(len(train_a_sims), size=num_points)
-train_a = train_a_sims[idx]
-train_u = train_u_sims[idx]
+train_a = torch.tensor(aa)[train_index]
+train_u = uu[train_index]
 
-idx = np.random.randint(len(test_a_sims), size=int(num_points/10))
-test_a = test_a_sims[idx]
-test_u = test_u_sims[idx]
+test_a = torch.tensor(aa)[test_index]
+test_u = uu[test_index]
 
 print("Training Input: " + str(train_a.shape))
 print("Training Output: " + str(train_u.shape))
