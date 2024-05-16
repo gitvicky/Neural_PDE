@@ -59,9 +59,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
 # %%
 #Importing the models and utilities. 
-from NeuralPDE.Models.FNO import *
-from NeuralPDE.Utils.processing_utils import * 
-from NeuralPDE.Utils.training_utils import * 
+from Neural_PDE.Models.FNO import *
+from Neural_PDE.Utils.processing_utils import * 
+from Neural_PDE.Utils.training_utils import * 
 
 # %% 
 #Settung up locations. 
