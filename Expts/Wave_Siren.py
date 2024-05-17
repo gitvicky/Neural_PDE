@@ -11,8 +11,9 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'Siren',
-                 "Epochs": 250,
-                 "Batch Size": 50000,
+                 "Epochs": 5000,
+                 "Batch Size": 200, #Actual batch will be Batch Size * Points
+                 "Points": 1000, #Points sampled for from the grid.  
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
                  "Scheduler Step": 100,
@@ -25,7 +26,6 @@ configuration = {"Case": 'Wave',
                  "Width": 256, 
                  "Coords": 3, #Number of spatio-temporal coordinates - would form the number of inputs 
                  "Variables":1, #Number of variables being modelled - would form the number of outputs. 
-                 "Points": 1000, #Points sampled for training. 10 percent of that is used for testing. 
                  "Loss Function": 'MSE',
                  "UQ": 'None', #None, Dropout
                  }
@@ -122,18 +122,22 @@ coords = torch.tensor(aa, dtype=torch.float32)
 context_len = S*S
 aa_context = u[:, :, : ,0].reshape(1000,-1)
 
-# %%
-#Setting up train and test
-#Splitting based on the simulations
-train_a_context = aa_context[:ntrain]
-train_u = uu[:ntrain]
-
-test_a_context = aa_context[-ntest:]
-test_u = uu[-ntest:]
+# %% 
+#Selecting a Random subset of coordinates from the Grid. 
+idx = np.random.randint(len(coords), size=num_points)
+co = torch.tile(coords[idx], (n_sims,1,1))
+aa_context = torch.tile(torch.unsqueeze(aa_context,1), (1,num_points,1))
+uu = uu[:,idx,:].to(device)
 
 
-print("Training Input: coords " + str(coords.shape))
-print("Training Input: context " + str(train_a_context.shape))
+# %% 
+train_a = torch.hstack((co[:ntrain].flatten(0,1), aa_context[:ntrain].flatten(0,1)))
+train_u = uu[:ntrain].flatten(0,1)
+
+test_a = torch.hstack((co[-ntest:].flatten(0,1), aa_context[-ntest:].flatten(0,1)))
+test_u = uu[-ntest:].flatten(0,1)
+
+print("Training Input: " + str(train_a.shape))
 print("Training Output: " + str(train_u.shape))
 
 # %%
@@ -148,20 +152,20 @@ elif norm_strategy == 'Range':
 elif norm_strategy == 'Gaussian':
     normalizer = GaussianNormalizer
 
-a_normalizer = normalizer(train_a_context)
+a_normalizer = normalizer(train_a)
 u_normalizer = normalizer(train_u)
 
 coords_norm = a_normalizer.encode(coords)
-train_a = a_normalizer.encode(train_a_context)
-test_a = a_normalizer.encode(test_a_context)
+train_a = a_normalizer.encode(train_a)
+test_a = a_normalizer.encode(test_a)
 
 train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
 
 # %%
 #Setting up the data loaders. 
-train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a_context, train_u), batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a_context, test_u_encoded), batch_size=batch_size, shuffle=False)
+train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u_encoded), batch_size=batch_size, shuffle=False)
 
 t2 = default_timer()
 print('preprocessing finished, time used:', t2-t1)
@@ -191,7 +195,7 @@ start_time = default_timer()
 for ep in range(epochs): #Training Loop - Epochwise
     model.train()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch(model, coords, num_points, train_loader, test_loader, loss_func, optimizer)
+    train_loss, test_loss = train_one_epoch(model, train_loader, test_loader, loss_func, optimizer)
     t2 = default_timer()
 
     train_loss = train_loss / ntrain
@@ -212,9 +216,9 @@ train_time = default_timer() - start_time
 # run.save(saved_model, 'output')
 # %%
 #Validation using the data split simulation-wise. 
-test_a = a_normalizer.encode(test_a_sims)
-test_u = test_u_sims
-test_u_encoded = u_normalizer.encode(test_u_sims)
+test_a = a_normalizer.encode(test_a)
+test_u = test_u
+test_u_encoded = u_normalizer.encode(test_u)
 pred_set_encoded, mse, mae = validation(model, test_a, test_u_encoded)
 # %%
 print('(MSE) Testing Error: %.3e' % (mse))

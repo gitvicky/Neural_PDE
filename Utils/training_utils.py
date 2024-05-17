@@ -164,19 +164,20 @@ def train_one_epoch_INR(model, coords, num_points, train_loader, test_loader, lo
     for xx, yy in train_loader:
         optimizer.zero_grad()
 
+        #Random subset of points 
         idx = np.random.randint(len(coords), size=num_points)
 
-        xx = xx.to(device)
+        xx = torch.tile(torch.unsqueeze(xx,1), (1,num_points,1))
         batch_size = xx.shape[0]
         yy = yy[:,idx,:].to(device)
-        cc = torch.tile(coords[idx], (batch_size,1,1)).to(device)
-
-        xx.stack()
-
+        co = torch.tile(coords[idx], (batch_size,1,1))
         
-        coords = np.tile(coords[idx], (batch_size,1,1))
-        loss = loss_func(model, xx)
- 
+        xx = torch.hstack((xx.flatten(0,1), co.flatten(0,1))).to(device)
+        yy = yy.flatten(0,1).to(device)
+        
+        out, _ = model(xx)
+        loss = loss_func(out, yy)
+
         loss.backward()
         # torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
         optimizer.step()
@@ -187,8 +188,20 @@ def train_one_epoch_INR(model, coords, num_points, train_loader, test_loader, lo
     test_loss = 0
     with torch.no_grad():
         for xx, yy in test_loader:
-            xx, yy = xx.to(device), yy.to(device)
+            
+            #Random subset of points 
+            idx = np.random.randint(len(coords), size=num_points)
+
+            xx = torch.tile(torch.unsqueeze(xx,1), (1,num_points,1))
             batch_size = xx.shape[0]
+            yy = yy[:,idx,:].to(device)
+            co = torch.tile(coords[idx], (batch_size,1,1))
+            
+            xx = torch.hstack((xx.flatten(0,1), co.flatten(0,1))).to(device)
+            yy = yy.flatten(0,1).to(device)
+
+            print(xx.shape, yy.shape)
+
             out, _ = model(xx)
             test_loss += (out.reshape(batch_size, -1) -  yy.reshape(batch_size, -1)).pow(2).mean().item()
 
