@@ -13,6 +13,7 @@ Training and Inference pipelines for Neural-PDE solvers with autoregresive tempo
 # Training - Autoregressive temporal rollouts. 
 ################################################################
 
+import numpy as np 
 import torch 
 from timeit import default_timer
 from tqdm import tqdm
@@ -122,7 +123,7 @@ def validation_AR(model, test_a, test_u, step, T_out):
 
 # %% 
 ################################################################
-# Training - Supervised with no roll-outs. 
+# Training - With PDE Losses
 ################################################################
 
 def train_one_epoch_PINN(model, train_loader, test_loader, loss_func, optimizer):
@@ -134,6 +135,46 @@ def train_one_epoch_PINN(model, train_loader, test_loader, loss_func, optimizer)
         yy = yy.to(device)
         batch_size = xx.shape[0]
 
+        loss = loss_func(model, xx)
+ 
+        loss.backward()
+        # torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
+        optimizer.step()
+
+        train_loss += loss.item()
+    
+    # Validation Loop
+    test_loss = 0
+    with torch.no_grad():
+        for xx, yy in test_loader:
+            xx, yy = xx.to(device), yy.to(device)
+            batch_size = xx.shape[0]
+            out, _ = model(xx)
+            test_loss += (out.reshape(batch_size, -1) -  yy.reshape(batch_size, -1)).pow(2).mean().item()
+
+    return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
+
+# %% 
+################################################################
+# Training - Coordinate based MLPs (INRs) with context
+################################################################
+def train_one_epoch_INR(model, coords, num_points, train_loader, test_loader, loss_func, optimizer):
+    model.train()
+    train_loss = 0
+    for xx, yy in train_loader:
+        optimizer.zero_grad()
+
+        idx = np.random.randint(len(coords), size=num_points)
+
+        xx = xx.to(device)
+        batch_size = xx.shape[0]
+        yy = yy[:,idx,:].to(device)
+        cc = torch.tile(coords[idx], (batch_size,1,1)).to(device)
+
+        xx.stack()
+
+        
+        coords = np.tile(coords[idx], (batch_size,1,1))
         loss = loss_func(model, xx)
  
         loss.backward()

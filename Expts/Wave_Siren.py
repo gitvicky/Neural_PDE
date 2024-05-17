@@ -22,26 +22,26 @@ configuration = {"Case": 'Wave',
                  "Normalisation Strategy": 'Min-Max',
                  "T_range": 80, #Full range of time instances
                  "Layers": 5,                 
-                 "Width": 32, 
+                 "Width": 256, 
                  "Coords": 3, #Number of spatio-temporal coordinates - would form the number of inputs 
                  "Variables":1, #Number of variables being modelled - would form the number of outputs. 
-                 "Points":int(1e6), #Points sampled for training. 10 percent of that is used for testing. 
+                 "Points": 1000, #Points sampled for training. 10 percent of that is used for testing. 
                  "Loss Function": 'MSE',
                  "UQ": 'None', #None, Dropout
                  }
 
 # %%
 import os
-from simvue import Run
-run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
+# from simvue import Run
+# run = Run(mode='online')
+# run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
-run.save(os.path.abspath(__file__), 'code')
+# run.save(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
-run.update_metadata({'Git Hash': sha})
+# run.update_metadata({'Git Hash': sha})
 
 # %% 
 #Importing the necessary packages
@@ -90,6 +90,7 @@ y = data['y'].astype(np.float32)
 t = data['t'].astype(np.float32)
 u = torch.from_numpy(u_sol)
 u = u.permute(0, 2, 3, 1)
+n_sims = len(u_sol)
 
 # %% 
 ntrain = 800
@@ -110,26 +111,29 @@ t = t[:T_range]
 u = u[...,:T_range]
 xx, yy, tt = np.meshgrid(x, y, t)
 
+#Stacked cooredinate values and corresponding field values stacked. 
 aa = np.vstack((xx.flatten(), yy.flatten(), tt.flatten() )).T
-uu = u.reshape(u.shape[0], int(u.shape[1]*u.shape[2]*u.shape[3]))
+uu = u.reshape(u.shape[0], int(u.shape[1]*u.shape[2]*u.shape[3])).unsqueeze(-1)
+
+#coordinates 
+coords = torch.tensor(aa, dtype=torch.float32)
+
+#Getting the context from the initial conditions
+context_len = S*S
+aa_context = u[:, :, : ,0].reshape(1000,-1)
+
 # %%
 #Setting up train and test
 #Splitting based on the simulations
-train_a_sims = torch.tensor(np.tile(aa, (ntrain,1)))
-train_u_sims = uu[:ntrain].flatten().unsqueeze(-1)
+train_a_context = aa_context[:ntrain]
+train_u = uu[:ntrain]
 
-test_a_sims = torch.tensor(np.tile(aa, (ntest,1)))
-test_u_sims = uu[-ntest:].flatten().unsqueeze(-1)
+test_a_context = aa_context[-ntest:]
+test_u = uu[-ntest:]
 
-idx = np.random.randint(len(train_a_sims), size=num_points)
-train_a = train_a_sims[idx]
-train_u = train_u_sims[idx]
 
-idx = np.random.randint(len(test_a_sims), size=int(num_points/10))
-test_a = test_a_sims[idx]
-test_u = test_u_sims[idx]
-
-print("Training Input: " + str(train_a.shape))
+print("Training Input: coords " + str(coords.shape))
+print("Training Input: context " + str(train_a_context.shape))
 print("Training Output: " + str(train_u.shape))
 
 # %%
@@ -144,19 +148,20 @@ elif norm_strategy == 'Range':
 elif norm_strategy == 'Gaussian':
     normalizer = GaussianNormalizer
 
-a_normalizer = normalizer(train_a)
+a_normalizer = normalizer(train_a_context)
 u_normalizer = normalizer(train_u)
 
-train_a = a_normalizer.encode(train_a)
-test_a = a_normalizer.encode(test_a)
+coords_norm = a_normalizer.encode(coords)
+train_a = a_normalizer.encode(train_a_context)
+test_a = a_normalizer.encode(test_a_context)
 
 train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
 
 # %%
 #Setting up the data loaders. 
-train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u_encoded), batch_size=batch_size, shuffle=False)
+train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a_context, train_u), batch_size=batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a_context, test_u_encoded), batch_size=batch_size, shuffle=False)
 
 t2 = default_timer()
 print('preprocessing finished, time used:', t2-t1)
@@ -166,10 +171,10 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = Siren(in_features=num_coords, hidden_features=width, hidden_layers=layers, out_features=num_vars)
+model = Siren(in_features=num_coords+context_len, hidden_features=width, hidden_layers=layers, out_features=num_vars)
 model.to(device)
 
-run.update_metadata({'Number of Params': int(model.count_params())})
+# run.update_metadata({'Number of Params': int(model.count_params())})
 print("Number of model params : " + str(model.count_params()))
 
 #Setting up the optimizer and scheduler, loss and epochs 
@@ -186,14 +191,14 @@ start_time = default_timer()
 for ep in range(epochs): #Training Loop - Epochwise
     model.train()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch(model, train_loader, test_loader, loss_func, optimizer)
+    train_loss, test_loss = train_one_epoch(model, coords, num_points, train_loader, test_loader, loss_func, optimizer)
     t2 = default_timer()
 
     train_loss = train_loss / ntrain
     test_loss = test_loss / ntest
 
     print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 3)}, Test Loss: {round(test_loss,3)}")
-    run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
+    # run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
     
     scheduler.step()
 
@@ -202,9 +207,9 @@ train_time = default_timer() - start_time
 
 # %%
 #Saving the Model
-saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + run.name + '.pth'
-torch.save( model.state_dict(), saved_model)
-run.save(saved_model, 'output')
+# saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + run.name + '.pth'
+# torch.save( model.state_dict(), saved_model)
+# run.save(saved_model, 'output')
 # %%
 #Validation using the data split simulation-wise. 
 test_a = a_normalizer.encode(test_a_sims)
@@ -215,10 +220,10 @@ pred_set_encoded, mse, mae = validation(model, test_a, test_u_encoded)
 print('(MSE) Testing Error: %.3e' % (mse))
 print('(MAE) Testing Error: %.3e' % (mae))
 
-run.update_metadata({'Training Time': float(train_time),
-                     'MSE Test Error': float(mse),
-                     'MAE Test Error': float(mae)
-                    })
+# run.update_metadata({'Training Time': float(train_time),
+#                      'MSE Test Error': float(mse),
+#                      'MAE Test Error': float(mae)
+#                     })
 
 #%%
 #Denormalising the predictions
@@ -293,9 +298,9 @@ ax.axes.yaxis.set_ticks([])
 fig.colorbar(pcm, pad=0.05)
 
 
-plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
-plt.savefig(plot_name)
-run.save(plot_name, 'output')
+# plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
+# plt.savefig(plot_name)
+# run.save(plot_name, 'output')
 
-run.close()
+# run.close()
 # %%
