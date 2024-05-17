@@ -12,7 +12,7 @@ configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'Siren',
                  "Epochs": 250,
-                 "Batch Size": 50000,
+                 "Batch Size": 10000,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
                  "Scheduler Step": 100,
@@ -33,15 +33,15 @@ configuration = {"Case": 'Wave',
 # %%
 import os
 from simvue import Run
-run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
+# run = Run(mode='disabled')
+# run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
-run.save(os.path.abspath(__file__), 'code')
+# run.save(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
-run.update_metadata({'Git Hash': sha})
+# run.update_metadata({'Git Hash': sha})
 
 # %% 
 #Importing the necessary packages
@@ -108,11 +108,11 @@ x, y, t, u_sol = solver.solve() #solution shape -> t, x, y
 # x = data['x'].astype(np.float32)
 # y = data['y'].astype(np.float32)
 # t = data['t'].astype(np.float32)
-u = torch.from_numpy(u_sol)
+u = torch.tensor(u_sol, dtype=torch.float32)
 u = u.permute(1,2,0)
 # %% 
-ntrain = 1
-ntest = 1
+ntrain = 1 #Only 1 simulation is used. 
+ntest = 1 #Only 1 simulation is used. 
 S = 33 #Grid Size
 
 #Extracting configuration files
@@ -143,10 +143,10 @@ mask = np.ones(len(aa), dtype=bool)
 mask[train_index.tolist()] = False
 test_index = mask
 
-train_a = torch.tensor(aa)[train_index]
+train_a = torch.tensor(aa, dtype=torch.float32)[train_index]
 train_u = uu[train_index]
 
-test_a = torch.tensor(aa)[test_index]
+test_a = torch.tensor(aa, dtype=torch.float32)[test_index]
 test_u = uu[test_index]
 
 print("Training Input: " + str(train_a.shape))
@@ -189,14 +189,19 @@ print('preprocessing finished, time used:', t2-t1)
 model = Siren(in_features=num_coords, hidden_features=width, hidden_layers=layers, out_features=num_vars)
 model.to(device)
 
-run.update_metadata({'Number of Params': int(model.count_params())})
+# run.update_metadata({'Number of Params': int(model.count_params())})
 print("Number of model params : " + str(model.count_params()))
 
 #Setting up the optimizer and scheduler, loss and epochs 
 optimizer = torch.optim.Adam(model.parameters(), lr=configuration['Learning Rate'], weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=configuration['Scheduler Step'], gamma=configuration['Scheduler Gamma'])
-loss_func = torch.nn.MSELoss()
 epochs = configuration['Epochs']
+
+def loss_func(model, xx):
+    outs, coords = model(xx)
+    derivs = gradient(gradient(outs, coords), coords)
+    pde = derivs[2] - (derivs[0] + derivs[1])
+    return pde.pow(2).mean()
 
 # %%
 ####################################
@@ -206,14 +211,14 @@ start_time = default_timer()
 for ep in range(epochs): #Training Loop - Epochwise
     model.train()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch(model, train_loader, test_loader, loss_func, optimizer)
+    train_loss, test_loss = train_one_epoch_PINN(model, train_loader, test_loader, loss_func, optimizer)
     t2 = default_timer()
 
     train_loss = train_loss / ntrain
     test_loss = test_loss / ntest
 
     print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 3)}, Test Loss: {round(test_loss,3)}")
-    run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
+    # run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
     
     scheduler.step()
 
