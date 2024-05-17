@@ -149,7 +149,7 @@ def train_one_epoch_PINN(model, train_loader, test_loader, loss_func, optimizer)
             xx, yy = xx.to(device), yy.to(device)
             batch_size = xx.shape[0]
             out, _ = model(xx)
-            test_loss += (out.reshape(batch_size, -1), yy.reshape(batch_size, -1)).pow(2).mean().item()
+            test_loss += (out.reshape(batch_size, -1) -  yy.reshape(batch_size, -1)).pow(2).mean().item()
 
     return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
 

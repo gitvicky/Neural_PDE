@@ -19,7 +19,7 @@ configuration = {"Case": 'Wave',
                  "Scheduler Gamma": 0.5,
                  "Activation": 'GeLU',
                  "Physics Normalisation": 'No',
-                 "Normalisation Strategy": 'Min-Max',
+                 "Normalisation Strategy": 'Identity',
                  "T_range": 80, #Full range of time instances
                  "Layers": 5,                 
                  "Width": 32, 
@@ -102,12 +102,6 @@ solver = Wave_2D_Spectral.Wave_2D(Nx, Nt, x_min, x_max, tend, c, Lambda, aa , bb
 #Solving and obtaining the solution. 
 x, y, t, u_sol = solver.solve() #solution shape -> t, x, y
 
-# data =  np.load(data_loc + '/Spectral_Wave_data_LHS.npz')
-
-# u_sol = data['u'].astype(np.float32)
-# x = data['x'].astype(np.float32)
-# y = data['y'].astype(np.float32)
-# t = data['t'].astype(np.float32)
 u = torch.tensor(u_sol, dtype=torch.float32)
 u = u.permute(1,2,0)
 # %% 
@@ -163,6 +157,8 @@ elif norm_strategy == 'Range':
     normalizer = RangeNormalizer
 elif norm_strategy == 'Gaussian':
     normalizer = GaussianNormalizer
+elif norm_strategy == 'Identity':
+    normalizer = Identity
 
 a_normalizer = normalizer(train_a)
 u_normalizer = normalizer(train_u)
@@ -227,39 +223,35 @@ train_time = default_timer() - start_time
 
 # %%
 #Saving the Model
-saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + run.name + '.pth'
-torch.save( model.state_dict(), saved_model)
-run.save(saved_model, 'output')
+# saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + run.name + '.pth'
+# torch.save( model.state_dict(), saved_model)
+# run.save(saved_model, 'output')
 # %%
 #Validation using the data split simulation-wise. 
-test_a = a_normalizer.encode(test_a_sims)
-test_u = test_u_sims
-test_u_encoded = u_normalizer.encode(test_u_sims)
+test_a = torch.tensor(aa, dtype=torch.float32)
+test_a = a_normalizer.encode(test_a)
+test_u = uu
+test_u_encoded = u_normalizer.encode(test_u)
 pred_set_encoded, mse, mae = validation(model, test_a, test_u_encoded)
 # %%
 print('(MSE) Testing Error: %.3e' % (mse))
 print('(MAE) Testing Error: %.3e' % (mae))
 
-run.update_metadata({'Training Time': float(train_time),
-                     'MSE Test Error': float(mse),
-                     'MAE Test Error': float(mae)
-                    })
+# run.update_metadata({'Training Time': float(train_time),
+#                      'MSE Test Error': float(mse),
+#                      'MAE Test Error': float(mae)
+#                     })
 
 #%%
 #Denormalising the predictions
 pred_set = u_normalizer.decode(pred_set_encoded.to(device)).cpu().detach().numpy()
 
 # Rearranging the Predictions for Evaluation. 
-test_u = test_u.reshape(ntest, num_vars, S, S, T_range)
-pred_set = pred_set.reshape(ntest, num_vars, S, S, T_range)
+test_u = test_u.reshape(1,num_vars,S,S,T_range)
+pred_set = pred_set.reshape(1,num_vars, S, S, T_range)
 # %% 
 #Plotting performance
-
-idx = np.random.randint(0,ntest) 
-idx = 5
-
-# %%
-
+idx=0
 u_field = test_u[idx]
     
 v_min_1 = torch.min(u_field[0, :, :, 0])
@@ -318,9 +310,9 @@ ax.axes.yaxis.set_ticks([])
 fig.colorbar(pcm, pad=0.05)
 
 
-plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
-plt.savefig(plot_name)
-run.save(plot_name, 'output')
+# plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
+# plt.savefig(plot_name)
+# run.save(plot_name, 'output')
 
-run.close()
+# run.close()
 # %%

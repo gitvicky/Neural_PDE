@@ -229,6 +229,28 @@ class MinMax_Normalizer(object):
         self.a = self.a.cpu()
         self.b = self.b.cpu()
 
+
+#normalization, Identity - does nothing
+class Identity(object):
+    def __init__(self, x, low=-1.0, high=1.0):
+        super(Identity, self).__init__()
+        self.a = 0
+        self.b = 0
+
+    def encode(self, x):
+        return x 
+
+    def decode(self, x):
+        return x
+
+    def cuda(self):
+        self.a = self.a.cuda()
+        self.b = self.b.cuda()
+
+    def cpu(self):
+        self.a = self.a.cpu()
+        self.b = self.b.cpu()
+
 # %% 
 ##################################
 # Loss Functions
