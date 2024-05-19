@@ -200,8 +200,6 @@ def train_one_epoch_INR(model, coords, num_points, train_loader, test_loader, lo
             xx = torch.hstack((xx.flatten(0,1), co.flatten(0,1))).to(device)
             yy = yy.flatten(0,1).to(device)
 
-            print(xx.shape, yy.shape)
-
             out, _ = model(xx)
             test_loss += (out.reshape(batch_size, -1) -  yy.reshape(batch_size, -1)).pow(2).mean().item()
 

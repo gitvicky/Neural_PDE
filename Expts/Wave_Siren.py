@@ -11,7 +11,7 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'Siren',
-                 "Epochs": 5000,
+                 "Epochs": 5,
                  "Batch Size": 200, #Actual batch will be Batch Size * Points
                  "Points": 1000, #Points sampled for from the grid.  
                  "Optimizer": 'Adam',
@@ -127,8 +127,7 @@ aa_context = u[:, :, : ,0].reshape(1000,-1)
 idx = np.random.randint(len(coords), size=num_points)
 co = torch.tile(coords[idx], (n_sims,1,1))
 aa_context = torch.tile(torch.unsqueeze(aa_context,1), (1,num_points,1))
-uu = uu[:,idx,:].to(device)
-
+uu = uu[:,idx,:]
 
 # %% 
 train_a = torch.hstack((co[:ntrain].flatten(0,1), aa_context[:ntrain].flatten(0,1)))
@@ -164,8 +163,8 @@ test_u_encoded = u_normalizer.encode(test_u)
 
 # %%
 #Setting up the data loaders. 
-train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u_encoded), batch_size=batch_size, shuffle=False)
+train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size*num_points, shuffle=True)
+test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u_encoded), batch_size=batch_size*num_points, shuffle=False)
 
 t2 = default_timer()
 print('preprocessing finished, time used:', t2-t1)
@@ -201,7 +200,7 @@ for ep in range(epochs): #Training Loop - Epochwise
     train_loss = train_loss / ntrain
     test_loss = test_loss / ntest
 
-    print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 3)}, Test Loss: {round(test_loss,3)}")
+    print(f"Epoch {ep}, Time Taken: {round(t2-t1,2)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss,5)}")
     # run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
     
     scheduler.step()
@@ -215,7 +214,45 @@ train_time = default_timer() - start_time
 # torch.save( model.state_dict(), saved_model)
 # run.save(saved_model, 'output')
 # %%
-#Validation using the data split simulation-wise. 
+#Validation using newly generated simulation data.
+
+#Example of Usage
+Nx = 33 # Mesh Discretesiation 
+Nt = 100 #Max time
+x_min = -1.0 # Minimum value of x
+x_max = 1.0 # maximum value of x
+y_min = -1.0 # Minimum value of y 
+y_max = 1.0 # Minimum value of y
+tend = 1
+Lambda = 20
+aa = 0.25
+bb = 0.25
+c = 1.0 # Wave Speed <=1.0
+
+#Initialising the Solver
+from Neural_PDE.Numerical_Solvers.Wave import Wave_2D_Spectral
+solver = Wave_2D_Spectral.Wave_2D(Nx, Nt, x_min, x_max, tend, c, Lambda, aa , bb)
+
+#Solving and obtaining the solution. 
+x, y, t, u_sol = solver.solve() #solution shape -> t, x, y
+u = torch.tensor(u_sol, dtype=torch.float32)
+u = u.permute(1,2,0)
+t = t[:T_range]
+u = u[...,:T_range]
+xx, yy, tt = np.meshgrid(x, y, t)
+
+#Stacked cooredinate values and corresponding field values stacked. 
+aa = np.vstack((xx.flatten(), yy.flatten(), tt.flatten() )).T
+uu = u.flatten().unsqueeze(-1)
+
+#coordinates 
+coords = torch.tensor(aa, dtype=torch.float32).unsqueeze(0)
+aa_context = u[...,0].flatten().unsqueeze(0)
+aa_context = torch.tile(torch.unsqueeze(aa_context,1), (1,int(Nx*Nx*len(t)),1))
+
+test_a = torch.hstack((coords.flatten(0,1), aa_context.flatten(0,1)))
+test_u = uu
+
 test_a = a_normalizer.encode(test_a)
 test_u = test_u
 test_u_encoded = u_normalizer.encode(test_u)
@@ -234,16 +271,12 @@ print('(MAE) Testing Error: %.3e' % (mae))
 pred_set = u_normalizer.decode(pred_set_encoded.to(device)).cpu().detach().numpy()
 
 # Rearranging the Predictions for Evaluation. 
+ntest = 1
 test_u = test_u.reshape(ntest, num_vars, S, S, T_range)
 pred_set = pred_set.reshape(ntest, num_vars, S, S, T_range)
 # %% 
-#Plotting performance
-
-idx = np.random.randint(0,ntest) 
-idx = 5
-
-# %%
-
+#Plotting the performance
+idx = 0
 u_field = test_u[idx]
     
 v_min_1 = torch.min(u_field[0, :, :, 0])

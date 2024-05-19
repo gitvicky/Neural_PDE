@@ -104,6 +104,16 @@ x, y, t, u_sol = solver.solve() #solution shape -> t, x, y
 
 u = torch.tensor(u_sol, dtype=torch.float32)
 u = u.permute(1,2,0)
+
+xx, yy, tt = np.meshgrid(x, y, t)
+
+#Stacked cooredinate values and corresponding field values stacked. 
+aa = np.vstack((xx.flatten(), yy.flatten(), tt.flatten() )).T
+uu = u.reshape(u.shape[0], int(u.shape[1]*u.shape[2]*u.shape[3])).unsqueeze(-1)
+
+#coordinates 
+coords = torch.tensor(aa, dtype=torch.float32)
+
 # %% 
 ntrain = 1 #Only 1 simulation is used. 
 ntest = 1 #Only 1 simulation is used. 
@@ -213,7 +223,7 @@ for ep in range(epochs): #Training Loop - Epochwise
     train_loss = train_loss / ntrain
     test_loss = test_loss / ntest
 
-    print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 3)}, Test Loss: {round(test_loss,3)}")
+    print(f"Epoch {ep}, Time Taken: {round(t2-t1,2)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss,5)}")
     # run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
     
     scheduler.step()
