@@ -78,9 +78,9 @@ def apply_dealias(f, dealias):
 
 # %% 
 class Navier_Stokes_2d:
-	def __init__(self, N, tEnd, dt, nu, L, aa, bb):
+	def __init__(self, N, tStart, tEnd, dt, nu, L, aa, bb):
 		self.N = N
-		self.t = 0
+		self.t = tStart
 		self.tEnd = tEnd
 		self.dt = dt 
 		self.nu = nu 
@@ -177,7 +177,7 @@ nu = 0.001#kinematic viscosity
 aa = 0.5#parametrisation of initial Vx 
 bb = 0.5#parametrisation of initial Vx 
 
-solver= Navier_Stokes_2d(N, tEnd, dt, nu, L, aa, bb)
-u, v, p, w, x, t, err = solver.solve()
+# solver= Navier_Stokes_2d(N, tStart, tEnd, dt, nu, L, aa, bb)
+# u, v, p, w, x, t, err = solver.solve()
 
 # %% 
