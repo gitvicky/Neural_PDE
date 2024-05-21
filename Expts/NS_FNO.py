@@ -32,7 +32,7 @@ configuration = {"Case": 'Navier-Stokes',
 # %%
 import os
 from simvue import Run
-run = Run(mode='online')
+run = Run(mode='disabled')
 run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'Tests', 'AR'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
@@ -69,6 +69,7 @@ file_loc = os.getcwd()
 data_loc = os.path.dirname(os.getcwd()) + '/Data'
 model_loc = file_loc + '/Weights'
 plot_loc = file_loc + '/Plots'
+
 #Setting up the seeds and devices
 torch.manual_seed(0)
 np.random.seed(0)
@@ -81,7 +82,7 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # %%
 t1 = default_timer()
-data =  np.load(data_loc + '/Spectral_Wave_data_LHS.npz')
+data =  np.load(data_loc + '/NS_Spectral.npz')
 
 u_sol = data['u'].astype(np.float32)
 x = data['x'].astype(np.float32)

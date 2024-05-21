@@ -17,6 +17,7 @@ Weights/
 *.pdf
 
 *.pyc
+*.log
 
 #Saved Plot
 Plots/

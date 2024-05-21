@@ -11,7 +11,7 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'Siren',
-                 "Epochs": 250,
+                 "Epochs": 10000,
                  "Batch Size": 50000,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -33,15 +33,15 @@ configuration = {"Case": 'Wave',
 # %%
 import os
 from simvue import Run
-# run = Run(mode='disabled')
-# run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
+run = Run(mode='online')
+run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
-# run.save(os.path.abspath(__file__), 'code')
+run.save(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
-# run.update_metadata({'Git Hash': sha})
+run.update_metadata({'Git Hash': sha})
 
 # %% 
 #Importing the necessary packages
@@ -195,7 +195,7 @@ print('preprocessing finished, time used:', t2-t1)
 model = Siren(in_features=num_coords, hidden_features=width, hidden_layers=layers, out_features=num_vars)
 model.to(device)
 
-# run.update_metadata({'Number of Params': int(model.count_params())})
+run.update_metadata({'Number of Params': int(model.count_params())})
 print("Number of model params : " + str(model.count_params()))
 
 #Setting up the optimizer and scheduler, loss and epochs 
@@ -224,7 +224,7 @@ for ep in range(epochs): #Training Loop - Epochwise
     test_loss = test_loss / ntest
 
     print(f"Epoch {ep}, Time Taken: {round(t2-t1,2)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss,5)}")
-    # run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
+    run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
     
     scheduler.step()
 
@@ -233,9 +233,9 @@ train_time = default_timer() - start_time
 
 # %%
 #Saving the Model
-# saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + run.name + '.pth'
-# torch.save( model.state_dict(), saved_model)
-# run.save(saved_model, 'output')
+saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + run.name + '.pth'
+torch.save( model.state_dict(), saved_model)
+run.save(saved_model, 'output')
 # %%
 #Validation using the data split simulation-wise. 
 test_a = torch.tensor(aa, dtype=torch.float32)
@@ -247,10 +247,10 @@ pred_set_encoded, mse, mae = validation(model, test_a, test_u_encoded)
 print('(MSE) Testing Error: %.3e' % (mse))
 print('(MAE) Testing Error: %.3e' % (mae))
 
-# run.update_metadata({'Training Time': float(train_time),
-#                      'MSE Test Error': float(mse),
-#                      'MAE Test Error': float(mae)
-#                     })
+run.update_metadata({'Training Time': float(train_time),
+                     'MSE Test Error': float(mse),
+                     'MAE Test Error': float(mae)
+                    })
 
 #%%
 #Denormalising the predictions
@@ -320,9 +320,9 @@ ax.axes.yaxis.set_ticks([])
 fig.colorbar(pcm, pad=0.05)
 
 
-# plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
-# plt.savefig(plot_name)
-# run.save(plot_name, 'output')
+plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
+plt.savefig(plot_name)
+run.save(plot_name, 'output')
 
-# run.close()
+run.close()
 # %%

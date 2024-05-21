@@ -11,7 +11,7 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'Siren',
-                 "Epochs": 5,
+                 "Epochs": 500,
                  "Batch Size": 200, #Actual batch will be Batch Size * Points
                  "Points": 1000, #Points sampled for from the grid.  
                  "Optimizer": 'Adam',
@@ -26,22 +26,23 @@ configuration = {"Case": 'Wave',
                  "Width": 256, 
                  "Coords": 3, #Number of spatio-temporal coordinates - would form the number of inputs 
                  "Variables":1, #Number of variables being modelled - would form the number of outputs. 
+                 "Context": 800,
                  "Loss Function": 'MSE',
                  "UQ": 'None', #None, Dropout
                  }
 
 # %%
 import os
-# from simvue import Run
-# run = Run(mode='online')
-# run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
+from simvue import Run
+run = Run(mode='online')
+run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
 
-#Saving the current run file and the git hash of the repo
-# run.save(os.path.abspath(__file__), 'code')
+# Saving the current run file and the git hash of the repo
+run.save(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
-# run.update_metadata({'Git Hash': sha})
+run.update_metadata({'Git Hash': sha})
 
 # %% 
 #Importing the necessary packages
@@ -119,8 +120,8 @@ uu = u.reshape(u.shape[0], int(u.shape[1]*u.shape[2]*u.shape[3])).unsqueeze(-1)
 coords = torch.tensor(aa, dtype=torch.float32)
 
 #Getting the context from the initial conditions
-context_len = S*S
-aa_context = u[:, :, : ,0].reshape(1000,-1)
+context_len = configuration['Context']
+aa_context = sample_equidistant(u[...,0], context_len)
 
 # %% 
 #Selecting a Random subset of coordinates from the Grid. 
@@ -177,7 +178,7 @@ print('preprocessing finished, time used:', t2-t1)
 model = Siren(in_features=num_coords+context_len, hidden_features=width, hidden_layers=layers, out_features=num_vars)
 model.to(device)
 
-# run.update_metadata({'Number of Params': int(model.count_params())})
+run.update_metadata({'Number of Params': int(model.count_params())})
 print("Number of model params : " + str(model.count_params()))
 
 #Setting up the optimizer and scheduler, loss and epochs 
@@ -201,7 +202,7 @@ for ep in range(epochs): #Training Loop - Epochwise
     test_loss = test_loss / ntest
 
     print(f"Epoch {ep}, Time Taken: {round(t2-t1,2)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss,5)}")
-    # run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
+    run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
     
     scheduler.step()
 
@@ -210,9 +211,9 @@ train_time = default_timer() - start_time
 
 # %%
 #Saving the Model
-# saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + run.name + '.pth'
-# torch.save( model.state_dict(), saved_model)
-# run.save(saved_model, 'output')
+saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + run.name + '.pth'
+torch.save( model.state_dict(), saved_model)
+run.save(saved_model, 'output')
 # %%
 #Validation using newly generated simulation data.
 
@@ -247,7 +248,7 @@ uu = u.flatten().unsqueeze(-1)
 
 #coordinates 
 coords = torch.tensor(aa, dtype=torch.float32).unsqueeze(0)
-aa_context = u[...,0].flatten().unsqueeze(0)
+aa_context = sample_equidistant(u[...,0].unsqueeze(0), context_len)
 aa_context = torch.tile(torch.unsqueeze(aa_context,1), (1,int(Nx*Nx*len(t)),1))
 
 test_a = torch.hstack((coords.flatten(0,1), aa_context.flatten(0,1)))
@@ -261,10 +262,10 @@ pred_set_encoded, mse, mae = validation(model, test_a, test_u_encoded)
 print('(MSE) Testing Error: %.3e' % (mse))
 print('(MAE) Testing Error: %.3e' % (mae))
 
-# run.update_metadata({'Training Time': float(train_time),
-#                      'MSE Test Error': float(mse),
-#                      'MAE Test Error': float(mae)
-#                     })
+run.update_metadata({'Training Time': float(train_time),
+                     'MSE Test Error': float(mse),
+                     'MAE Test Error': float(mae)
+                    })
 
 #%%
 #Denormalising the predictions
@@ -335,9 +336,9 @@ ax.axes.yaxis.set_ticks([])
 fig.colorbar(pcm, pad=0.05)
 
 
-# plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
-# plt.savefig(plot_name)
-# run.save(plot_name, 'output')
+plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
+plt.savefig(plot_name)
+run.save(plot_name, 'output')
 
-# run.close()
+run.close()
 # %%

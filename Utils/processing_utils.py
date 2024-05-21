@@ -396,3 +396,35 @@ class MLP(nn.Module):
             x_temp = self.act_func(dense(x_temp))
         x_temp = self.layer_output(x_temp)
         return x_temp
+    
+
+#Sampling equidistantly from a 2D grid.
+def sample_equidistant(grid, num_samples):
+   
+    #    Sample values from a 2D NumPy grid in an equidistant manner.
+
+    # Args:
+    #     grid (numpy.ndarray): A 3D NumPy array representing the num_sim, x_grid, y_grid
+    #     num_samples (int): The total number of samples to retrieve equidistantly along each axis.
+
+    # Returns:
+    #     numpy.ndarray: A 3D NumPy array containing the sampled values from the equidistant points
+
+    sims, height, width = grid.shape
+    num_samples = int(np.sqrt(num_samples))
+    # Generate equidistant x-coordinates
+    x_coords = np.linspace(0, width - 1, num_samples, dtype=int)
+    
+    # Generate equidistant y-coordinates
+    y_coords = np.linspace(0, height - 1, num_samples, dtype=int)
+    
+    # Create a meshgrid of the x and y coordinates
+    xx, yy = np.meshgrid(x_coords, y_coords)
+    
+    # Flatten the meshgrid to get the indices
+    indices = np.vstack((yy.flatten(), xx.flatten())).T
+    
+    # Sample the grid using the indices
+    samples = grid[:, indices[:, 0], indices[:, 1]]
+    
+    return samples
