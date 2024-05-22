@@ -20,7 +20,7 @@ from NS_2D import *
 # %%
 start_time = time()
 
-n_sims = 2
+n_sims = 100 
 
 lb = np.asarray([0.5, 0.5]) #a, b
 ub = np.asarray([1.0, 1.0])
@@ -69,6 +69,4 @@ p = np.asarray(p_list)
 w = np.asarray(w_list)
 
 # %% 
-np.savez(os.path.dirname(os.path.dirname(os.getcwd())) + "/Data/NS_Spectral_combined100.npz", u=u, v=v, p=p, w=w, x=x, dt=0.001*t_slice)
-
-# %%
+np.savez(os.path.dirname(os.path.dirname(os.getcwd())) + "/Data/NS_Spectral_combined.npz", u=u, v=v, p=p, w=w, x=x, dt=0.001*t_slice)
