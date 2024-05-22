@@ -84,6 +84,10 @@ vol = dx**2
 xlin = np.linspace(0.5*dx, boxsize-0.5*dx, N)
 x = xlin
 
+<<<<<<< HEAD
 np.savez(os.path.dirname(os.path.dirname(os.getcwd())) + "/Data/Constrained_MHD_combined100.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, dt=dt)
+=======
+np.savez(os.getcwd() + "/Data/Constrained_MHD_combined100.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, t=dt)
+>>>>>>> a1674f0 (datagen)
 
 # %%
