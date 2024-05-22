@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FNO modelled over the 2D Navier-Stokes equations auto-regressively 
+FNO modelled over 2D MHD Equations auto-regressively
 
 """
 
 # %%
-configuration = {"Case": 'Navier-Stokes',
-                 "Field": ['u', 'v', 'p', 'w'],
+configuration = {"Case": 'MHD',
+                 "Field": ['rho', 'u', 'v', 'p', 'Bx', 'By'],
                  "Model": 'FNO',
                  "Epochs": 1,
                  "Batch Size": 50,
@@ -24,7 +24,7 @@ configuration = {"Case": 'Navier-Stokes',
                  "Width_time": 32, 
                  "Width_vars": 0,  
                  "Modes": 8,
-                 "Variables":4, 
+                 "Variables":6, 
                  "Loss Function": 'LP',
                  "UQ": 'None', #None, Dropout
                  }
@@ -82,15 +82,18 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 # %%
 t1 = default_timer()
-data =  np.load(data_loc + '/NS_Spectral_combined.npz')
+data =  np.load(data_loc + '/Constrained_MHD_combined.npz')
 
-u = data['u'].astype(np.float32)
+rho = data['rho'].astype(np.float32)
+u = data['v'].astype(np.float32)
 v = data['v'].astype(np.float32)
 p = data['p'].astype(np.float32)
-w = data['w'].astype(np.float32)
+Bx = data['Bx'].astype(np.float32)
+By  = data['By'].astype(np.float32)
+
 x = data['x'].astype(np.float32)
 y = data['x'].astype(np.float32)
-dt = data['dt'].astype(np.float32)
+t = data['t'].astype(np.float32)
 
 def stacked_fields(variables):
     stack = []
@@ -102,9 +105,7 @@ def stacked_fields(variables):
     stack = torch.stack(stack, dim=1)
     return stack
 
-vars = stacked_fields([u,v,p,w])
-
-field = configuration['Field']
+vars = stacked_fields([rho, u, v, p, Bx, By])
 
 # %% 
 ntrain = 800
