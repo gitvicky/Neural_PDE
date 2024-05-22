@@ -443,5 +443,5 @@ class constrainedTransport_MHD:
 		return np.asarray(rho_list), np.asarray(u_list), np.asarray(v_list), np.asarray(p_list), np.asarray(bx_list), np.asarray(by_list), err
 
 # %% 
-solver= constrainedTransport_MHD(128, 1.0, 0.5, 1.0, 1.0, 1.0) # N, L, tEnd, a, b, c
-rho, u, v, p, bx, by = solver.solve()
+# solver= constrainedTransport_MHD(128, 1.0, 0.5, 1.0, 1.0, 1.0) # N, L, tEnd, a, b, c
+# rho, u, v, p, bx, by = solver.solve()

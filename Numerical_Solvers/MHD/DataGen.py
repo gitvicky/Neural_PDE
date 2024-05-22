@@ -23,7 +23,7 @@ tEnd = 0.5
 # %%
 start_time = time()
 
-n_sims = 1000
+n_sims = 3
 
 lb = np.asarray([0.5, 0.5, 0.5]) #a, b, c
 ub = np.asarray([1.0, 1.0, 1.0])
@@ -68,6 +68,10 @@ for ii in tqdm(range(n_sims)):
     Bx_list.append(np.load(data_loc + str(ii) + ".npz")['Bx'])
     By_list.append(np.load(data_loc + str(ii) + ".npz")['By'])
     dt_list.append(np.load(data_loc + str(ii) + ".npz")['dt'])
+    try: 
+        os.remove(data_loc + str(ii) + ".npz")
+    except:
+        pass
 
 # %%
     
@@ -84,10 +88,6 @@ vol = dx**2
 xlin = np.linspace(0.5*dx, boxsize-0.5*dx, N)
 x = xlin
 
-<<<<<<< HEAD
-np.savez(os.path.dirname(os.path.dirname(os.getcwd())) + "/Data/Constrained_MHD_combined100.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, dt=dt)
-=======
-np.savez(os.getcwd() + "/Data/Constrained_MHD_combined100.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, t=dt)
->>>>>>> a1674f0 (datagen)
+np.savez(os.path.dirname(os.path.dirname(os.getcwd())) + "/Data/Constrained_MHD_combined.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, t=dt)
 
 # %%

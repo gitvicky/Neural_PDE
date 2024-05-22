@@ -58,7 +58,11 @@ for ii in tqdm(range(n_sims)):
     v_list.append(np.load(data_loc + str(ii) + ".npz")['v'])
     p_list.append(np.load(data_loc + str(ii) + ".npz")['p'])
     w_list.append(np.load(data_loc + str(ii) + ".npz")['w'])
-
+    try: 
+        os.remove(data_loc + str(ii) + ".npz")
+    except:
+        pass
+    
 x = x[::x_slice]
 dt = 0.001 * t_slice
 
