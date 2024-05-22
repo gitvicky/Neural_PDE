@@ -23,7 +23,7 @@ tEnd = 0.5
 # %%
 start_time = time()
 
-n_sims = 100
+n_sims = 1000
 
 lb = np.asarray([0.5, 0.5, 0.5]) #a, b, c
 ub = np.asarray([1.0, 1.0, 1.0])
@@ -41,7 +41,7 @@ while ii < n_sims:
     rho, u, v, p, Bx, By, dt, err = solve(N, boxsize, tEnd, params[ii, 0], params[ii, 1], params[ii, 2])
     rho, u, v, p, Bx, By, dt = rho[:t_len], u[:t_len], v[:t_len], p[:t_len], Bx[:t_len], By[:t_len], dt[:t_len]
     if err == 0:
-        np.savez(os.getcwd() + "/Data/Constrained_MHD_" + str(ii) + ".npz", rho=rho[::t_slice, ::x_slice, ::x_slice], u=u[::t_slice, ::x_slice, ::x_slice], v=v[::t_slice, ::x_slice, ::x_slice], p=p[::t_slice, ::x_slice, ::x_slice], Bx=Bx[::t_slice, ::x_slice, ::x_slice], By=By[::t_slice, ::x_slice, ::x_slice], dt=dt[::t_slice])
+        np.savez(os.path.dirname(os.path.dirname(os.getcwd())) + "/Data/Constrained_MHD_" + str(ii) + ".npz", rho=rho[::t_slice, ::x_slice, ::x_slice], u=u[::t_slice, ::x_slice, ::x_slice], v=v[::t_slice, ::x_slice, ::x_slice], p=p[::t_slice, ::x_slice, ::x_slice], Bx=Bx[::t_slice, ::x_slice, ::x_slice], By=By[::t_slice, ::x_slice, ::x_slice], dt=dt[::t_slice])
         ii+=1
         print(ii)
 
@@ -50,7 +50,7 @@ end_time = time()
 print("Total Time : " + str(end_time - start_time))
 # %%
 #Cleaning up the runs into one. 
-data_loc = os.getcwd() + '/Data/Constrained_MHD_'
+data_loc = os.path.dirname(os.path.dirname(os.getcwd())) + '/Data/Constrained_MHD_'
 
 rho_list = []
 u_list = []
@@ -84,6 +84,6 @@ vol = dx**2
 xlin = np.linspace(0.5*dx, boxsize-0.5*dx, N)
 x = xlin
 
-np.savez(os.getcwd() + "/Data/Constrained_MHD_combined100.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, dt=dt)
+np.savez(os.path.dirname(os.path.dirname(os.getcwd())) + "/Data/Constrained_MHD_combined100.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, dt=dt)
 
 # %%
