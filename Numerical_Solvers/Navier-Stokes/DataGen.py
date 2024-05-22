@@ -19,7 +19,7 @@ from NS_2D import *
 # %%
 start_time = time()
 
-n_sims = 100 
+n_sims = 5
 
 lb = np.asarray([0.5, 0.5]) #a, b
 ub = np.asarray([1.0, 1.0])
