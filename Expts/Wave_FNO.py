@@ -56,9 +56,9 @@ import time
 from timeit import default_timer
 from tqdm import tqdm 
 
-#Adding the NPDE package to the system python path
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
+# #Adding the NPDE package to the system python path
+# import sys
+# sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
 # %%
 #Importing the models and utilities. 
 from Neural_PDE.Models.FNO import *
@@ -152,7 +152,7 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = FNO_multi(T_in, step, modes, modes, num_vars, width_vars, width_time)
+model = FNO_multi(T_in, step, modes, modes, num_vars, width_time)
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})

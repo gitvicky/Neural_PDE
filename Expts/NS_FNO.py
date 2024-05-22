@@ -166,7 +166,7 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = FNO_multi(T_in, step, modes, modes, num_vars, width_vars, width_time)
+model = FNO_multi(T_in, step, modes, modes, num_vars, width_time)
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})
