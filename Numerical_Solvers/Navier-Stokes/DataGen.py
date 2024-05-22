@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 
-Data Generation of the Navier-Stokes Turbulence 
-
+Data Generation of the Navier-Stokes Turbulence using a Spectral Solver
 """
 
 # %%
