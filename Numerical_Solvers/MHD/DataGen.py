@@ -23,13 +23,21 @@ tEnd = 0.5
 # %%
 start_time = time()
 
-n_sims = 10
+n_sims = 1000
 
 lb = np.asarray([0.5, 0.5, 0.5]) #a, b, c
 ub = np.asarray([1.0, 1.0, 1.0])
 
 params = lb + (ub - lb) * lhs(3, n_sims*2) #Safety 20 
 
+# %% 
+import sys 
+def update_status_bar(progress):
+    bar_length = 20
+    filled_length = int(bar_length * progress // 100)
+    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+    sys.stdout.write(f'\rProgress: [{bar}] {progress}%')
+    sys.stdout.flush()
 # %%
 t_len = 400
 t_slice = 10 
@@ -43,7 +51,8 @@ while ii < n_sims:
     if err == 0:
         np.savez(os.path.dirname(os.path.dirname(os.getcwd())) + "/Data/Constrained_MHD_" + str(ii) + ".npz", rho=rho[::t_slice, ::x_slice, ::x_slice], u=u[::t_slice, ::x_slice, ::x_slice], v=v[::t_slice, ::x_slice, ::x_slice], p=p[::t_slice, ::x_slice, ::x_slice], Bx=Bx[::t_slice, ::x_slice, ::x_slice], By=By[::t_slice, ::x_slice, ::x_slice], dt=dt[::t_slice])
         ii+=1
-        print(ii)
+        progress = int(ii / n_sims * 100)
+        update_status_bar(progress)
 
 # %%
 end_time = time()

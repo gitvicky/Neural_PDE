@@ -308,7 +308,7 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 	tEnd                   = tEnd
 	tOut                   = 0.01 # draw frequency
 	useSlopeLimiting       = True
-	plotRealTime = True # switch on for plotting as the simulation goes along
+	plotRealTime = False # switch on for plotting as the simulation goes along
 	
 	# Mesh
 	dx = boxsize / N
@@ -336,9 +336,9 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 	# Get conserved variables
 	Mass, Momx, Momy, Energy = getConserved( rho, vx, vy, P, Bx, By, gamma, vol )
 	
-	# prep figure
-	fig = plt.figure(figsize=(4,4), dpi=80)
-	outputCount = 1
+	# # prep figure
+	# fig = plt.figure(figsize=(4,4), dpi=80)
+	# outputCount = 1
 	
 	# Simulation Main Loop
 	while t < tEnd:
@@ -407,23 +407,23 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 		# check div B
 		divB = getDiv(bx,by,dx)
 		mean_divB = np.mean(np.abs(divB))
-		print("t = ", t, ", mean |divB| = ", mean_divB)
+		# print("t = ", t, ", mean |divB| = ", mean_divB)
 
 		if mean_divB > 0 : 
 			err = 0
 		
-		# plot in real time
-		if (plotRealTime and plotThisTurn) or (t >= tEnd):
-			plt.cla()
-			plt.imshow(rho.T, cmap='jet')
-			plt.clim(0.06, 0.5)
-			ax = plt.gca()
-			ax.invert_yaxis()
-			ax.get_xaxis().set_visible(False)
-			ax.get_yaxis().set_visible(False)	
-			ax.set_aspect('equal')	
-			plt.pause(0.001)
-			outputCount += 1
+		# # plot in real time
+		# if (plotRealTime and plotThisTurn): #or (t >= tEnd):
+		# 	plt.cla()
+		# 	plt.imshow(rho.T, cmap='jet')
+		# 	plt.clim(0.06, 0.5)
+		# 	ax = plt.gca()
+		# 	ax.invert_yaxis()
+		# 	ax.get_xaxis().set_visible(False)
+		# 	ax.get_yaxis().set_visible(False)	
+		# 	ax.set_aspect('equal')	
+		# 	plt.pause(0.001)
+		# 	outputCount += 1
 			
 
 		rho_list.append(rho)

@@ -189,7 +189,8 @@ train_time = default_timer() - start_time
 
 # %%
 #Saving the Model
-saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + run.name + '.pth'
+saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '.pth'
+
 torch.save( model.state_dict(), saved_model)
 run.save(saved_model, 'output')
 # %%
