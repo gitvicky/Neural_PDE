@@ -179,6 +179,15 @@ test_a = a_normalizer.encode(test_a)
 train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
 
+#Saving Normalisation 
+saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz', 
+
+np.savez(saved_normalisations, 
+        in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
+        out_a=u_normalizer.a.numpy(), out_b=a_normalizer.b.numpy()
+        )
+
+run.save(saved_normalisations, 'output')
 # %%
 #Setting up the data loaders. 
 train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)

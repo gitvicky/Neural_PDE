@@ -11,7 +11,7 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'FNO',
-                 "Epochs": 500,
+                 "Epochs": 5,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -56,9 +56,9 @@ import time
 from timeit import default_timer
 from tqdm import tqdm 
 
-# #Adding the NPDE package to the system python path
-# import sys
-# sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
+#Adding the NPDE package to the system python path
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
 # %%
 #Importing the models and utilities. 
 from Neural_PDE.Models.FNO import *
@@ -138,7 +138,16 @@ test_a = a_normalizer.encode(test_a)
 
 train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
+# %%
+#Saving Normalisation 
+saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz', 
 
+np.savez(saved_normalisations, 
+        in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
+        out_a=u_normalizer.a.numpy(), out_b=a_normalizer.b.numpy()
+        )
+
+run.save(saved_normalisations, 'output')
 # %%
 #Setting up the data loaders. 
 train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)
@@ -173,7 +182,7 @@ for ep in range(epochs): #Training Loop - Epochwise
 
     model.train()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch_ar(model, train_loader, test_loader, loss_func, optimizer, step, T_out)
+    train_loss, test_loss = train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, step, T_out)
     t2 = default_timer()
 
     train_loss = train_loss / ntrain / num_vars
@@ -195,7 +204,7 @@ torch.save( model.state_dict(), saved_model)
 run.save(saved_model, 'output')
 # %%
 #Validation
-pred_set_encoded, mse, mae = validation_ar(model, test_a, test_u_encoded, step, T_out)
+pred_set_encoded, mse, mae = validation_AR(model, test_a, test_u_encoded, step, T_out)
 # %%
 print('(MSE) Testing Error: %.3e' % (mse))
 print('(MAE) Testing Error: %.3e' % (mae))

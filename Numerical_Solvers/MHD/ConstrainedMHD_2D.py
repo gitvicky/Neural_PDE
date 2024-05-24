@@ -407,7 +407,7 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 		# check div B
 		divB = getDiv(bx,by,dx)
 		mean_divB = np.mean(np.abs(divB))
-		# print("t = ", t, ", mean |divB| = ", mean_divB)
+		print("t = ", t, ", mean |divB| = ", mean_divB)
 
 		if mean_divB > 0 : 
 			err = 0
