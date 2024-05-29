@@ -144,7 +144,7 @@ saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configur
 
 np.savez(saved_normalisations, 
         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
-        out_a=u_normalizer.a.numpy(), out_b=a_normalizer.b.numpy()
+        out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
         )
 
 run.save(saved_normalisations, 'output')

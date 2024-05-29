@@ -133,6 +133,7 @@ elif norm_strategy == 'Gaussian':
 a_normalizer = normalizer(train_a)
 u_normalizer = normalizer(train_u)
 
+# %% 
 train_a = a_normalizer.encode(train_a)
 test_a = a_normalizer.encode(test_a)
 
@@ -144,7 +145,7 @@ saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configur
 
 np.savez(saved_normalisations, 
         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
-        out_a=u_normalizer.a.numpy(), out_b=a_normalizer.b.numpy()
+        out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
         )
 
 run.save(saved_normalisations, 'output')
@@ -162,6 +163,7 @@ print('preprocessing finished, time used:', t2-t1)
 ################################################################
 
 model = FNO_multi(T_in, step, modes, modes, num_vars, width_time)
+model.load_state_dict(torch.load(model_loc + '/FNO_Wave_null-shape.pth', map_location='cpu'))
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})
