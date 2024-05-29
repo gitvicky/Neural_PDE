@@ -11,7 +11,7 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'FNO',
-                 "Epochs": 5,
+                 "Epochs": 500,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -140,7 +140,7 @@ train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
 # %%
 #Saving Normalisation 
-saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz', 
+saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' + run.name + '_' + 'norms.npz'
 
 np.savez(saved_normalisations, 
         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
@@ -206,8 +206,8 @@ run.save(saved_model, 'output')
 #Validation
 pred_set_encoded, mse, mae = validation_AR(model, test_a, test_u_encoded, step, T_out)
 # %%
-print('(MSE) Testing Error: %.3e' % (mse))
-print('(MAE) Testing Error: %.3e' % (mae))
+print('Testing Error (MSE) : %.3e' % (mse))
+print('Testing Error (MAE) : %.3e' % (mae))
 
 run.update_metadata({'Training Time': float(train_time),
                      'MSE Test Error': float(mse),

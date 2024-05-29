@@ -140,7 +140,7 @@ train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
 
 #Saving Normalisation 
-saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz', 
+saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz'
 
 np.savez(saved_normalisations, 
         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
@@ -205,8 +205,8 @@ run.save(saved_model, 'output')
 #Validation
 pred_set_encoded, mse, mae = validation_ar(model, test_a, test_u_encoded, step, T_out)
 # %%
-print('(MSE) Testing Error: %.3e' % (mse))
-print('(MAE) Testing Error: %.3e' % (mae))
+print('Testing Error (MSE) : %.3e' % (mse))
+print('Testing Error (MAE) : %.3e' % (mae))
 
 run.update_metadata({'Training Time': float(train_time),
                      'MSE Test Error': float(mse),
