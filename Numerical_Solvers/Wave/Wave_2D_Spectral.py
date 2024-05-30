@@ -16,15 +16,16 @@ from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm  
 from tqdm import tqdm 
  
-
 class Wave_2D:
-    def __init__(self, Nx, Nt, x_min, x_max, t_end, c, Lambda, aa, bb):
+    def __init__(self, Nx, x_min, x_max, t_end, c, Lambda, aa, bb):
 
-        self.N =  Nx
+        self.N =  Nx - 1 
         self.x_min = x_min
         self.x_max = x_max
         self.y_min = x_min
         self.y_max = x_max
+        self.dx = (x_max - x_min)/self.N
+        self.dy = (y_max - y_min)/self.N
         self.tend = t_end
         self.Lambda = Lambda
         self.a = aa 
@@ -69,15 +70,20 @@ class Wave_2D:
         tc = 0 
         while tc < self.nstep:
 
-            xxx = np.arange(self.x_min, self.x_max+1/16, 1/16)
-            yyy = np.arange(self.y_min, self.y_max+1/16, 1/16)
-
+            #With Grid interpolation 
+            xxx = np.arange(self.x_min, self.x_max+self.dx, self.dx)
+            yyy = np.arange(self.y_min, self.y_max+self.dy, self.dy)
             vvv = interpolate.interp2d(self.x, self.y, self.vv, kind='cubic')
             Z = vvv(xxx, yyy)
 
             #Need to fix this to be in line with the latest scipy versions
             # vvv = interpolate.RegularGridInterpolator((self.x, self.y), self.vv, method='cubic')
             # Z = vvv((xxx, yyy))
+            
+            # #Without any interpolation
+            # xxx = np.linspace(solver.x_min, solver.x_max, solver.N)
+            # yyy = np.linspace(solver.x_min, solver.x_max, solver.N)
+            # Z = self.vv
                 
             uxx = np.zeros((self.N+1, self.N+1))
             uyy = np.zeros((self.N+1, self.N+1))
@@ -131,8 +137,7 @@ class Wave_2D:
 
 # %%
 #Example of Usage
-Nx = 30 # Mesh Discretesiation 
-Nt = 100 
+Nx = 32 # Mesh Discretesiation 
 x_min = -1.0 # Minimum value of x
 x_max = 1.0 # maximum value of x
 y_min = -1.0 # Minimum value of y 
@@ -144,9 +149,17 @@ bb = 0.25
 c = 1.0 # Wave Speed <=1.0
 
 #Initialising the Solver
-solver = Wave_2D(Nx, Nt, x_min, x_max, tend, c, Lambda, aa , bb)
+solver = Wave_2D(Nx, x_min, x_max, tend, c, Lambda, aa , bb)
 
 #Solving and obtaining the solution. 
 xx, yy, t, u_sol = solver.solve() #solution shape -> t, x, y
 # %%
 
+# Plot the solution at the final time step
+plt.imshow(u_sol[-1], cmap='viridis', extent=[x_min, x_max, y_min, y_max])
+plt.colorbar()
+plt.xlabel('x')
+plt.ylabel('y')
+plt.title('2D Wave Equation - Spectral FFT Solver')
+plt.show()
+# %%
