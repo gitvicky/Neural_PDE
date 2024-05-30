@@ -136,30 +136,30 @@ class Wave_2D:
         return xxx, yyy, self.t, u_sol
 
 # %%
-#Example of Usage
-Nx = 32 # Mesh Discretesiation 
-x_min = -1.0 # Minimum value of x
-x_max = 1.0 # maximum value of x
-y_min = -1.0 # Minimum value of y 
-y_max = 1.0 # Minimum value of y
-tend = 1
-Lambda = 20
-aa = 0.25
-bb = 0.25
-c = 1.0 # Wave Speed <=1.0
+# #Example of Usage
+# Nx = 32 # Mesh Discretesiation 
+# x_min = -1.0 # Minimum value of x
+# x_max = 1.0 # maximum value of x
+# y_min = -1.0 # Minimum value of y 
+# y_max = 1.0 # Minimum value of y
+# tend = 1
+# Lambda = 20
+# aa = 0.25
+# bb = 0.25
+# c = 1.0 # Wave Speed <=1.0
 
-#Initialising the Solver
-solver = Wave_2D(Nx, x_min, x_max, tend, c, Lambda, aa , bb)
+# #Initialising the Solver
+# solver = Wave_2D(Nx, x_min, x_max, tend, c, Lambda, aa , bb)
 
-#Solving and obtaining the solution. 
-xx, yy, t, u_sol = solver.solve() #solution shape -> t, x, y
-# %%
+# #Solving and obtaining the solution. 
+# xx, yy, t, u_sol = solver.solve() #solution shape -> t, x, y
+# # %%
 
-# Plot the solution at the final time step
-plt.imshow(u_sol[-1], cmap='viridis', extent=[x_min, x_max, y_min, y_max])
-plt.colorbar()
-plt.xlabel('x')
-plt.ylabel('y')
-plt.title('2D Wave Equation - Spectral FFT Solver')
-plt.show()
+# # Plot the solution at the final time step
+# plt.imshow(u_sol[-1], cmap='viridis', extent=[x_min, x_max, y_min, y_max])
+# plt.colorbar()
+# plt.xlabel('x')
+# plt.ylabel('y')
+# plt.title('2D Wave Equation - Spectral FFT Solver')
+# plt.show()
 # %%
