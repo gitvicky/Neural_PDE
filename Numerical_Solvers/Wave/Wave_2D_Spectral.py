@@ -17,7 +17,7 @@ from matplotlib import cm
 from tqdm import tqdm 
  
 class Wave_2D:
-    def __init__(self, Nx, x_min, x_max, t_end, c, Lambda, aa, bb):
+    def __init__(self, Nx, x_min, x_max, t_end, c):
 
         self.N =  Nx - 1 
         self.x_min = x_min
@@ -25,17 +25,13 @@ class Wave_2D:
         self.y_min = x_min
         self.y_max = x_max
         self.dx = (x_max - x_min)/self.N
-        self.dy = (y_max - y_min)/self.N
+        self.dy = self.dx
         self.tend = t_end
-        self.Lambda = Lambda
-        self.a = aa 
-        self.b = bb 
+
         self.c = c # Wave Speed <=1.0
         assert self.c <= 1, "Unrealistic Wave Speed"
 
-        self.intialise()
-
-    def intialise(self):
+    def intialise(self, Lambda, aa, bb):
         """
         Initialize the grid, time step, and initial conditions.
         """
@@ -47,13 +43,15 @@ class Wave_2D:
         self.dt = 6/self.N**2
         
         #Initial Conditions 
-        self.vv = np.exp(-self.Lambda*((self.xx-self.a)**2 + (self.yy-self.b)**2))
+        self.vv = np.exp(-Lambda*((self.xx-aa)**2 + (self.yy-bb)**2))
         self.vvold = self.vv.copy()
         
         self.nstep = int(self.tend / self.dt) + 1
         self.t = np.arange(0,self.tend+self.dt,self.dt)
 
-    def solve(self):
+    def solve(self, Lambda, aa, bb):
+
+        self.intialise(Lambda, aa, bb)
 
         """
         Solve the 2D wave equation using the spectral method.
@@ -149,10 +147,10 @@ class Wave_2D:
 # c = 1.0 # Wave Speed <=1.0
 
 # #Initialising the Solver
-# solver = Wave_2D(Nx, x_min, x_max, tend, c, Lambda, aa , bb)
+# solver = Wave_2D(Nx, x_min, x_max, tend, c)
 
 # #Solving and obtaining the solution. 
-# xx, yy, t, u_sol = solver.solve() #solution shape -> t, x, y
+# xx, yy, t, u_sol = solver.solve(Lambda, aa , bb) #solution shape -> t, x, y
 # # %%
 
 # # Plot the solution at the final time step
@@ -162,4 +160,4 @@ class Wave_2D:
 # plt.ylabel('y')
 # plt.title('2D Wave Equation - Spectral FFT Solver')
 # plt.show()
-# %%
+# # %%
