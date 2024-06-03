@@ -7,9 +7,9 @@ FNO modelled over 2D MHD Equations auto-regressively
 
 # %%
 configuration = {"Case": 'MHD',
-                 "Field": ['rho', 'u', 'v', 'p', 'Bx', 'By'],
+                 "Field": 'rho, u, v, p, Bx, By',
                  "Model": 'FNO',
-                 "Epochs": 1,
+                 "Epochs": 500,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -32,7 +32,7 @@ configuration = {"Case": 'MHD',
 # %%
 import os
 from simvue import Run
-run = Run(mode='disabled')
+run = Run(mode='online')
 run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'Tests', 'AR'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
@@ -106,7 +106,7 @@ def stacked_fields(variables):
     return stack
 
 vars = stacked_fields([rho, u, v, p, Bx, By])
-
+field = ['rho', 'u', 'v', 'p', 'Bx', 'By'],
 # %% 
 ntrain = 800
 ntest = 200
@@ -159,7 +159,7 @@ saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configur
 
 np.savez(saved_normalisations, 
         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
-        out_a=u_normalizer.a.numpy(), out_b=a_normalizer.b.numpy()
+        out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
         )
 
 run.save(saved_normalisations, 'output')
@@ -176,7 +176,7 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = FNO_multi(T_in, step, modes, modes, num_vars, width_time)
+model = FNO_multi2D(T_in, step, modes, modes, num_vars, width_time)
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})

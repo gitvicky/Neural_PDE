@@ -24,9 +24,9 @@ configuration = {"Case": 'Wave',
                  "T_out": 60,
                  "Step": 10,
                  "Width_time": 32, 
-                 "Width_vars": 0,  
+                 "Width_vARs": 0,  
                  "Modes": 8,
-                 "Variables":1, 
+                 "VARiables":1, 
                  "Loss Function": 'LP',
                  "UQ": 'None', #None, Dropout
                  }
@@ -40,7 +40,7 @@ run.init(folder="/Neural_PDE", tags=['NPDE', 'U-Net', 'Tests', 'AR'], metadata=c
 #Saving the current run file and the git hash of the repo
 run.save(os.path.abspath(__file__), 'code')
 import git
-repo = git.Repo(search_parent_directories=True)
+repo = git.Repo(seARch_parent_directories=True)
 sha = repo.head.object.hexsha
 run.update_metadata({'Git Hash': sha})
 
@@ -75,6 +75,7 @@ plot_loc = file_loc + '/Plots'
 torch.manual_seed(0)
 np.random.seed(0)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+torch.set_default_dtype(torch.float32)
 
 # %%
 ################################################################
@@ -182,7 +183,7 @@ for ep in range(epochs): #Training Loop - Epochwise
 
     model.train()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch_ar(model, train_loader, test_loader, loss_func, optimizer, step, T_out)
+    train_loss, test_loss = train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, step, T_out)
     t2 = default_timer()
 
     train_loss = train_loss / ntrain / num_vars
@@ -203,8 +204,8 @@ torch.save( model.state_dict(), saved_model)
 run.save(saved_model, 'output')
 # %%
 #Validation
-pred_set_encoded, mse, mae = validation_ar(model, test_a, test_u_encoded, step, T_out)
-# %%
+pred_set_encoded, mse, mae = validation_AR(model, test_a, test_u_encoded, step, T_out)
+
 print('Testing Error (MSE) : %.3e' % (mse))
 print('Testing Error (MAE) : %.3e' % (mae))
 

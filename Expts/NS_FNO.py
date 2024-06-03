@@ -7,9 +7,9 @@ FNO modelled over the 2D Navier-Stokes equations auto-regressively
 
 # %%
 configuration = {"Case": 'Navier-Stokes',
-                 "Field": ['u', 'v', 'p', 'w'],
+                 "Field": 'u, v, p, w',
                  "Model": 'FNO',
-                 "Epochs": 1,
+                 "Epochs": 500,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -21,7 +21,7 @@ configuration = {"Case": 'Navier-Stokes',
                  "T_in": 10,    
                  "T_out": 40,
                  "Step": 10,
-                 "Width_time": 32, 
+                 "Width_time": 16, 
                  "Width_vars": 0,  
                  "Modes": 8,
                  "Variables":4, 
@@ -32,7 +32,7 @@ configuration = {"Case": 'Navier-Stokes',
 # %%
 import os
 from simvue import Run
-run = Run(mode='disabled')
+run = Run(mode='online')
 run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'Tests', 'AR'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
@@ -98,13 +98,12 @@ def stacked_fields(variables):
         var = torch.from_numpy(var) #Converting to Torch
         var = var.permute(0, 2, 3, 1) #Permuting to be BS, Nx, Ny, Nt
         stack.append(var)
-        print(var.shape)
     stack = torch.stack(stack, dim=1)
     return stack
 
 vars = stacked_fields([u,v,p,w])
 
-field = configuration['Field']
+field = ['u', 'v', 'p', 'w']
 
 # %% 
 ntrain = 800
@@ -154,11 +153,11 @@ train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
 
 #Saving Normalisation 
-saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz', 
+saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' + run.name + '_' + 'norms.npz'
 
 np.savez(saved_normalisations, 
         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
-        out_a=u_normalizer.a.numpy(), out_b=a_normalizer.b.numpy()
+        out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
         )
 
 run.save(saved_normalisations, 'output')
@@ -175,7 +174,7 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = FNO_multi(T_in, step, modes, modes, num_vars, width_time)
+model = FNO_multi2D(T_in, step, modes, modes, num_vars, width_time)
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})
