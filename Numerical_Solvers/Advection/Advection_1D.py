@@ -24,7 +24,7 @@ import matplotlib.pyplot as plt
 
 class Advection_1d:
     
-    def __init__(self, Nx, Nt, x_min, x_max, t_end, v, xc):
+    def __init__(self, Nx, Nt, x_min, x_max, t_end):
        
         """
         Initialize the Advection_1d class.
@@ -49,16 +49,9 @@ class Advection_1d:
         self.dt = (t_end)/self.t_length
         self.t = np.arange(0, t_end, self.dt)
         self.tmax = t_end
-    
-        self.v = v # velocity
-        self.xc = xc #position of the gaussian
 
         self.initializeDomain()
-        self.initializeU()
-        self.initializeParams()
         
-        self.u_sol = []
-        self.u_exact = []
         
     def initializeDomain(self):
         """
@@ -91,7 +84,17 @@ class Advection_1d:
         # Assert that the CFL condition is not violated
         assert courant_number <= 1, "CFL condition violated"
         
-    def solve(self):
+    def solve(self, v, xc):
+
+        self.v = v # velocity
+        self.xc = xc #position of the gaussian
+        
+        self.initializeU()
+        self.initializeParams()
+        
+        self.u_sol = []
+        self.u_exact = []
+
         """
         Solve the advection equation using the Lax-Friedrichs method.
 
@@ -127,15 +130,16 @@ class Advection_1d:
         return self.x, np.linspace(0, self.tmax, self.nsteps), np.asarray(self.u_sol), np.asarray(self.u_exact)
 
 
-if __name__ == "__main__":
-    #Example Usage 
-    Nx = 100 #Number of x-points
-    Nt = 50 #Number of time instances 
-    x_min, x_max = 0.0, 2.0 #X min and max
-    t_end = 0.5 #time length
-    v = 1 #Advection velocity 
-    xc = 0.25 #Centre of Gaussian 
+# if __name__ == "__main__":
+#     #Example Usage 
+#     Nx = 100 #Number of x-points
+#     Nt = 50 #Number of time instances 
+#     x_min, x_max = 0.0, 2.0 #X min and max
+#     t_end = 0.5 #time length
+#     v = 1 #Advection velocity 
+#     xc = 0.25 #Centre of Gaussian 
     
-    sim = Advection_1d(Nx, Nt, x_min, x_max, t_end, v, xc) 
-    x, t, u_sol, u_exact = sim.solve()
-    v = 1 
+#     sim = Advection_1d(Nx, Nt, x_min, x_max, t_end) 
+#     x, t, u_sol, u_exact = sim.solve(v, xc)
+#     v = 1 
+# %%

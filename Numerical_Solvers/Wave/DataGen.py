@@ -80,7 +80,8 @@ def LHS_Sampling(N=10):
     
     for ii in tqdm(range(N)):
                 x, y, t, u = solver.solve(param_lhs[ii, 0], param_lhs[ii, 1], param_lhs[ii, 2])
-                list_u.append(u)
+                t = t[::5]
+                list_u.append(u[::5])
         
     ic = param_lhs
     u = np.asarray(list_u)
@@ -88,3 +89,4 @@ def LHS_Sampling(N=10):
     np.savez('Spectral_Wave_data_LHS.npz', x=x, y=y,t=t, u=u, ic=ic)
 
 # %%
+LHS_Sampling(1000)

@@ -234,8 +234,8 @@ class MinMax_Normalizer(object):
 class Identity(object):
     def __init__(self, x, low=-1.0, high=1.0):
         super(Identity, self).__init__()
-        self.a = 0
-        self.b = 0
+        self.a = torch.tensor(0)
+        self.b = torch.tensor(0)
 
     def encode(self, x):
         return x 
