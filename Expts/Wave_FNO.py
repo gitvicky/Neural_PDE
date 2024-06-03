@@ -162,8 +162,8 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = FNO_multi2D(T_in, step, modes, modes, num_vars, width_time)
-model.load_state_dict(torch.load(model_loc + '/FNO_Wave_null-shape.pth', map_location='cpu'))
+model = FNO_multi2d(T_in, step, modes, modes, num_vars, width_time)
+# model.load_state_dict(torch.load(model_loc + '/FNO_Wave_null-shape.pth', map_location='cpu'))
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})

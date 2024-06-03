@@ -67,9 +67,9 @@ class SpectralConv2d(nn.Module):
         x = torch.fft.irfft2(out_ft, s=(x.size(-2), x.size(-1)))
         return x
 
-class MLP(nn.Module):
+class MLP2d(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels):
-        super(MLP, self).__init__()
+        super(MLP2d, self).__init__()
         self.mlp1 = nn.Conv3d(in_channels, mid_channels, 1)
         self.mlp2 = nn.Conv3d(mid_channels, out_channels, 1)
         self.activation = F.gelu
@@ -91,7 +91,7 @@ class FNO2d(nn.Module):
         self.width = width
 
         self.conv = SpectralConv2d(self.width, self.width, self.vars, self.modes1, self.modes2)
-        self.mlp = MLP(self.width, self.width, self.width)
+        self.mlp = MLP2d(self.width, self.width, self.width)
         self.w = nn.Conv3d(self.width, self.width, 1)
         self.b = nn.Conv3d(2, self.width, 1)
 
@@ -108,9 +108,9 @@ class FNO2d(nn.Module):
 
 # %%
 
-class FNO_multi2D(nn.Module):
+class FNO_multi2d(nn.Module):
     def __init__(self, T_in, step, modes1, modes2, num_vars, width_time, width_vars=0, grid='arbitrary'):
-        super(FNO_multi2D, self).__init__()
+        super(FNO_multi2d, self).__init__()
 
         """
         The overall network. It contains 4 layers of the Fourier layer.
@@ -245,9 +245,9 @@ class SpectralConv1d(nn.Module):
         x = torch.fft.irfft(out_ft, n=x.size(-1))
         return x
 
-class MLP(nn.Module):
+class MLP1d(nn.Module):
     def __init__(self, in_channels, out_channels, mid_channels):
-        super(MLP, self).__init__()
+        super(MLP1d, self).__init__()
         self.mlp1 = nn.Conv2d(in_channels, mid_channels, 1)
         self.mlp2 = nn.Conv2d(mid_channels, out_channels, 1)
         self.activation = F.gelu
@@ -268,7 +268,7 @@ class FNO1d(nn.Module):
         self.width = width
 
         self.conv = SpectralConv1d(self.width, self.width, self.vars, self.modes1)
-        self.mlp = MLP(self.width, self.width, self.width)
+        self.mlp = MLP1d(self.width, self.width, self.width)
         self.w = nn.Conv2d(self.width, self.width, 1)
         self.b = nn.Conv2d(1, self.width, 1)
 
@@ -283,9 +283,9 @@ class FNO1d(nn.Module):
         x = self.activation(x)
         return x
 
-class FNO_multi1D(nn.Module):
+class FNO_multi1d(nn.Module):
     def __init__(self, T_in, step, modes1, num_vars, width_time, width_vars=0, grid='arbitrary'):
-        super(FNO_multi1D, self).__init__()
+        super(FNO_multi1d, self).__init__()
 
         """
         The overall network. It contains 4 layers of the Fourier layer.

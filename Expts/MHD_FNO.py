@@ -101,7 +101,6 @@ def stacked_fields(variables):
         var = torch.from_numpy(var) #Converting to Torch
         var = var.permute(0, 2, 3, 1) #Permuting to be BS, Nx, Ny, Nt
         stack.append(var)
-        print(var.shape)
     stack = torch.stack(stack, dim=1)
     return stack
 
@@ -155,7 +154,7 @@ train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
 
 #Saving Normalisation 
-saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz', 
+saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' + run.name + '_' + 'norms.npz'
 
 np.savez(saved_normalisations, 
         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
@@ -176,7 +175,7 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = FNO_multi2D(T_in, step, modes, modes, num_vars, width_time)
+model = FNO_multi2d(T_in, step, modes, modes, num_vars, width_time)
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})
@@ -297,7 +296,7 @@ for var in range(num_vars):
     ax.axes.yaxis.set_ticks([])
     fig.colorbar(pcm, pad=0.05)
 
-    plot_name = plot_loc + '/' + configuration['Field'][var] + '_' + run.name + '.png'
+    plot_name = plot_loc + '/' + field[var] + '_' + run.name + '.png'
     plt.savefig(plot_name)
     run.save(plot_name, 'output')
 
