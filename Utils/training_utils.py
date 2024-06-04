@@ -219,7 +219,7 @@ def train_one_epoch(model, train_loader, test_loader, loss_func, optimizer):
         yy = yy.to(device)
         batch_size = xx.shape[0]
 
-        im, _ = model(xx)
+        im = model(xx)
         loss = loss_func(im.reshape(batch_size, -1), yy.reshape(batch_size, -1))
  
         loss.backward()
@@ -235,7 +235,7 @@ def train_one_epoch(model, train_loader, test_loader, loss_func, optimizer):
         for xx, yy in test_loader:
             xx, yy = xx.to(device), yy.to(device)
             batch_size = xx.shape[0]
-            out, _ = model(xx)
+            out = model(xx)
             test_loss += loss_func(out.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
 
     return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.

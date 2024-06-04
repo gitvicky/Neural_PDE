@@ -328,10 +328,7 @@ class FNO_multi1d(nn.Module):
         self.activation = torch.nn.GELU()
     def forward(self, x):
         grid = self.get_grid(x.shape, x.device)
-        print(x.shape)
-        print(grid.shape)
         x = torch.cat((x, grid), dim=-1)
-        print(x.shape)
 
         x = self.fc0_time(x)
         x = x.permute(0, 3, 1, 2)
@@ -377,7 +374,7 @@ class FNO_multi1d(nn.Module):
     
 # %%
 # #Example Usage
-# model = FNO_multi1D(T_in=20, step=5, modes1=8, num_vars=1, width_time=32, width_vars=0)
+# model = FNO_multi1d(T_in=20, step=5, modes1=8, num_vars=1, width_time=32, width_vars=0)
 # ins = torch.randn(100,1,64,20) #BS, num_vars, Nx, Ny, T_in
 # outs = model(ins)
 # %%
