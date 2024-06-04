@@ -13,7 +13,7 @@ Equation:
 configuration = {"Case": 'Advection',
                  "Field": 'u',
                  "Model": 'UNet',
-                 "Epochs": 500,
+                 "Epochs": 100,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.001,
@@ -89,7 +89,7 @@ t_end = 0.5 #time length
 
 sim = Advection_1d(Nx, Nt, x_min, x_max, t_end) 
 
-n_sims = 10
+n_sims = 100
 
 lb = np.asarray([0.1, 0.1]) #pos, velocity
 ub = np.asarray([1.0, 1.0])
@@ -110,12 +110,12 @@ velocity = params[:,1]
 
 # %% 
 u = torch.tensor(u_sol, dtype=torch.float32)
-# u = u.permute(0, 2, 1) #only for FNO
+u = u.permute(0, 2, 1) #only for FNO
 x_grid = x
 t_grid = t
 # %% 
-ntrain = 800
-ntest = 200
+ntrain = 80
+ntest = 20
 S = Nx  #Grid Size
 
 #Extracting configuration files
@@ -127,11 +127,11 @@ output_size = configuration['Step']
 num_vars = configuration['Variables']
 batch_size = configuration['Batch Size']
 
-train_a = u[:ntrain,:T_in,:]
-train_u = u[:ntrain,T_in:T_out+T_in,:]
+train_a = u[:ntrain, :, :T_in]
+train_u = u[:ntrain, :, T_in:T_out+T_in]
 
-test_a = u[-ntest:,:T_in, :]
-test_u = u[-ntest:,T_in:T_out+T_in,:]
+test_a = u[-ntest:, :, :T_in]
+test_u = u[-ntest:, :, T_in:T_out+T_in]
 
 print(train_u.shape)
 print(test_u.shape)
@@ -202,7 +202,7 @@ for ep in range(epochs): #Training Loop - Epochwise
 
     model.train()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, step, T_out)
+    train_loss, test_loss = train_one_epoch(model, train_loader, test_loader, loss_func, optimizer)
     t2 = default_timer()
 
     train_loss = train_loss / ntrain / num_vars
@@ -224,7 +224,7 @@ run.save(saved_model, 'output')
 
 # %%
 #Testing 
-pred_set_encoded, mse, mae = validation_AR(model, test_a, test_u_encoded, step, T_out)
+pred_set_encoded, mse, mae = validation(model, test_a, test_u_encoded, step, T_out)
 
 print('Testing Error (MSE) : %.3e' % (mse))
 print('Testing Error (MAE) : %.3e' % (mae))

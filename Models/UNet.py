@@ -58,7 +58,7 @@ class UNet1d(nn.Module):
         )
 
     def forward(self, x):
-        # x = x.permute(0, 2, 1)
+        x = x.permute(0, 2, 1)
         enc1 = self.encoder1(x)
         print(enc1.shape)
         enc2 = self.encoder2(self.pool1(enc1))
@@ -81,7 +81,7 @@ class UNet1d(nn.Module):
         dec1 = torch.cat((dec1, enc1), dim=1)
         dec1 = self.decoder1(dec1)
         out = self.decoder1(dec1)
-        # out = out.permute(0, 2, 1)
+        out = out.permute(0, 2, 1)
         return out
 
 
