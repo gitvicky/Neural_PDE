@@ -13,7 +13,7 @@ from tqdm import tqdm
 from time import time
 from matplotlib import pyplot as plt 
 
-from NS_2D import *
+from Numerical_Solvers.Navier_Stokes.NS_2D_spectral import *
 
 
 # %%
