@@ -2,7 +2,7 @@
 
 import matplotlib.pyplot as plt
 import numpy as np
-
+import sys 
 """
 Create Your Own Finite Volume Fluid Simulation (With Python)
 Philip Mocz (2020) Princeton Univeristy, @PMocz
@@ -195,8 +195,14 @@ def getFlux(rho_L, rho_R, vx_L, vx_R, vy_L, vy_R, P_L, P_R, gamma):
 
 
 
+def update_status_bar(progress):
+    bar_length = 20
+    filled_length = int(bar_length * progress // 100)
+    bar = '█' * filled_length + '-' * (bar_length - filled_length)
+    sys.stdout.write(f'\rProgress: [{bar}] {progress}%')
+    sys.stdout.flush()
 
-def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac):
+def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, vy_ic=0.1, p_ic=2.5):
 	
 	""" Finite Volume simulation """
 	
@@ -209,7 +215,7 @@ def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac):
 	tEnd                   = tEnd
 	tOut                   = 0.02 # draw frequency
 	useSlopeLimiting       = False
-	plotRealTime = False # switch on for plotting as the simulation goes along
+	plotRealTime = True # switch on for plotting as the simulation goes along
 	
 	# Mesh
 	dx = boxsize / N
@@ -218,26 +224,30 @@ def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac):
 	Y, X = np.meshgrid( xlin, xlin )
 	
 	# Generate Initial Conditions - opposite moving streams with perturbation
-	w0 = 0.1
+	w0 = vy_ic
 	sigma = 0.05/np.sqrt(2.)
 	rho = 1. + (np.abs(Y-0.5) < 0.25)
 	vx = -0.5 + (np.abs(Y-0.5)<0.25)
 	vy = w0*np.sin(4*np.pi*X) * ( np.exp(-(Y-0.25)**2/(2 * sigma**2)) + np.exp(-(Y-0.75)**2/(2*sigma**2)) )
-	P = 2.5 * np.ones(X.shape)
+	P =  p_ic * np.ones(X.shape)
 
 	# Get conserved variables
 	Mass, Momx, Momy, Energy = getConserved(rho, vx, vy, P, gamma, vol)
 	
-	# prep figure
-	fig = plt.figure(figsize=(4,4), dpi=80)
-	outputCount = 1
+	# # prep figure
+	# fig = plt.figure(figsize=(4,4), dpi=80)
+	# outputCount = 1
 	
 	# Simulation Main Loop
 	rhorho = []
 	uu = []
 	vv = []
 	pp = []
+	dtt= []
 	while t < tEnd:
+		# Update the status bar 
+		progress = int((t / tEnd) * 100)
+		update_status_bar(progress)
 		
 		# get Primitive variables
 		rho, vx, vy, P = getPrimitive( Mass, Momx, Momy, Energy, gamma, vol)
@@ -246,10 +256,11 @@ def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac):
 		
 		# get time step (CFL) = dx / max signal speed
 		dt = courant_fac * np.min( dx / (np.sqrt( gamma*P/rho ) + np.sqrt(vx**2+vy**2)) )
-		plotThisTurn = False
-		if t + dt > outputCount*tOut:
-			dt = outputCount*tOut - t
-			plotThisTurn = True
+		dtt.append(dt)
+		# plotThisTurn = False
+		# if t + dt > outputCount*tOut:
+		# 	dt = outputCount*tOut - t
+		# 	plotThisTurn = True
 		
 		# calculate gradients
 		rho_dx, rho_dy = getGradient(rho, dx)
@@ -290,25 +301,25 @@ def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac):
 		t += dt
 		
 
-		# plot in real time
-		if (plotRealTime and plotThisTurn) or (t >= tEnd):
-			plt.cla()
-			plt.imshow(rho.T)
-			plt.clim(0.8, 2.2)
-			ax = plt.gca()
-			ax.invert_yaxis()
-			ax.get_xaxis().set_visible(True)
-			ax.get_yaxis().set_visible(True)	
-			ax.set_aspect('equal')	
-			plt.pause(0.001)
-			outputCount += 1
+	# 	# plot in real time
+	# 	if (plotRealTime and plotThisTurn) or (t >= tEnd):
+	# 		plt.cla()
+	# 		plt.imshow(rho.T)
+	# 		plt.clim(0.8, 2.2)
+	# 		ax = plt.gca()
+	# 		ax.invert_yaxis()
+	# 		ax.get_xaxis().set_visible(True)
+	# 		ax.get_yaxis().set_visible(True)	
+	# 		ax.set_aspect('equal')	
+	# 		plt.pause(0.001)
+	# 		outputCount += 1
 			
 	
-	# Save figure
-	# plt.savefig('finitevolume.png',dpi=240)
-	plt.show()
+	# # Save figure
+	# # plt.savefig('finitevolume.png',dpi=240)
+	# plt.show()
 
-	return np.asarray(rhorho), np.asarray(uu),  np.asarray(vv), np.asarray(pp)
+	return np.asarray(rhorho), np.asarray(uu),  np.asarray(vv), np.asarray(pp), dx, dtt
 
 
 # %%
@@ -321,8 +332,12 @@ tStart                 = 0
 tEnd                   = 2.0
 gamma                  = 5/3 # ideal gas gamma
 courant_fac            = 0.4
+vy_ic                  = 0.1 # initial vy parameterisations
+p_ic                   = 2.5 # initial pressure value 
 
+rho, uu, vv, pp, dx, dtt = KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, vy_ic, p_ic)
 
-rho, uu, vv, pp = KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac)
-
+plt.imshow(rho[-1])
+plt.colorbar()
+plt.title("Density at time:  " + str(tEnd))
 # %% 
