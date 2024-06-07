@@ -325,19 +325,19 @@ def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, vy_ic=0.1, p_i
 # %%
 #Example Usage 
 
-# Simulation parameters
-N                      = 128 # resolution
-boxsize                = 1.
-tStart                 = 0
-tEnd                   = 2.0
-gamma                  = 5/3 # ideal gas gamma
-courant_fac            = 0.4
-vy_ic                  = 0.1 # initial vy parameterisations
-p_ic                   = 2.5 # initial pressure value 
+# # Simulation parameters
+# N                      = 128 # resolution
+# boxsize                = 1.
+# tStart                 = 0
+# tEnd                   = 2.0
+# gamma                  = 5/3 # ideal gas gamma
+# courant_fac            = 0.4
+# vy_ic                  = 0.1 # initial vy parameterisations
+# p_ic                   = 2.5 # initial pressure value 
 
-rho, uu, vv, pp, dx, dtt = KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, vy_ic, p_ic)
+# rho, uu, vv, pp, dx, dtt = KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, vy_ic, p_ic)
 
-plt.imshow(rho[-1])
-plt.colorbar()
-plt.title("Density at time:  " + str(tEnd))
+# plt.imshow(rho[-1])
+# plt.colorbar()
+# plt.title("Density at time:  " + str(tEnd))
 # %% 

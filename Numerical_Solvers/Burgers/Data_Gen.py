@@ -26,13 +26,14 @@ u_t(x,y,t=0) = 0
 
 # %% 
 #Importing the required packages
+import os
 import numpy as np
 import matplotlib.pyplot as plt 
 from tqdm import tqdm
 from pyDOE import lhs 
 from Burgers_1D import *
 # %%
-n_sims = 5 #Total Number of simulation datapoints to be generated. 
+n_sims = 1000 #Total Number of simulation datapoints to be generated. 
 
 #Grabbing the simulation parameters from the specified domain. 
  #alpha, beta, gamma
@@ -48,6 +49,8 @@ x_max = 2.0 #Max of X-range
 t_end = 1.25 #Time Maximum
 nu = 0.002
 
+x_slice = 5
+t_slice = 10
 # %%
 if __name__ == "__main__":
     sim = Burgers_1D(Nx, Nt, x_min, x_max, t_end, nu) 
@@ -59,10 +62,13 @@ if __name__ == "__main__":
         gamma = params[ii, 2]
 
         sim.InitializeU(alpha, beta, gamma)
-        u_sol = sim.solve()
+        u_sol, x, dt = sim.solve()
         u_list.append(u_sol)
 
-    u_sol = np.asarray(u_list)
+    u_sol = np.asarray(u_list)[:, ::t_slice, ::x_slice]
+    x = x[::x_slice]
+    dt = dt*t_slice
 
+    np.savez(os.getcwd() + "/Burgers_1d.npz", u=u_sol, x=x, dt=dt)
 
 # %%

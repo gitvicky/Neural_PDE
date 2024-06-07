@@ -13,7 +13,7 @@ from tqdm import tqdm
 from time import time
 from matplotlib import pyplot as plt 
 
-from Numerical_Solvers.Navier_Stokes.NS_2D_spectral import *
+from NS_2D_spectral import *
 
 
 # %%
@@ -35,6 +35,7 @@ ii=0
 while ii < n_sims:
     solver= Navier_Stokes_2d(400, 0.0, 0.5, 0.001, 0.001, 1, params[ii, 0], params[ii, 1]) # N, t, tEnd, dt, nu, L, a , b  #(a and b are multiplier for the IC - ranging from 0.1 to 1, 1 being used by Philip)
     u, v, p, w, x, dt,err = solver.solve()
+    
     if err == 0:
         np.savez(os.getcwd() + "/NS_Spectral_" + str(ii) + ".npz", u=u[::t_slice, ::x_slice, ::x_slice], v=v[::t_slice, ::x_slice, ::x_slice], p=p[::t_slice, ::x_slice, ::x_slice], w=w[::t_slice, ::x_slice, ::x_slice], x=x[::x_slice], t=0.001*t_slice)
         ii+=1
