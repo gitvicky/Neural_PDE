@@ -1,19 +1,19 @@
 """
 Created on 12 Dec 2023
 
-Obtaining the Physics Residuals as a measure of UQ on FNO surrogate for 1D Advection Equation .
+Obtaining the Physics Residuals as a measure of UQ on U-Net surrogate for 1D Advection Equation .
 
 Equation: 
-    U_t + v U_x = 0
+    u_t + u*u_x =  nu*u_xx on [0,2]
 
 """
 
 #%%
 #Training Configuration - used as the config file for simvue.
-configuration = {"Case": 'Advection',
+configuration = {"Case": 'Burgers',
                  "Field": 'u',
                  "Model": 'FNO',
-                 "Epochs": 100,
+                 "Epochs": 500,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.001,
@@ -76,49 +76,24 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.set_default_dtype(torch.float32)
 
 # %% 
-#Generating the Datasets by running the simulation
+# %%
+################################################################
+# Loading Data 
+################################################################
+
 t1 = default_timer()
-from Neural_PDE.Numerical_Solvers.Advection.Advection_1D import *
-from pyDOE import lhs
-
-#Obtaining the exact and FD solution of the 1D Advection Equation. 
-
-Nx = 200 #Number of x-points
-Nt = 50 #Number of time instances 
-x_min, x_max = 0.0, 2.0 #X min and max
-t_end = 0.5 #time length
-
-sim = Advection_1d(Nx, Nt, x_min, x_max, t_end) 
-
-n_sims = 100
-
-lb = np.asarray([0.1, 0.1]) #pos, velocity
-ub = np.asarray([1.0, 1.0])
-
-params = lb + (ub - lb) * lhs(2, n_sims)
-
-u_sol = []
-for ii in tqdm(range(n_sims)):
-    xc = params[ii, 0]
-    v = params[ii, 1]
-    x, t, u_soln, u_exact = sim.solve(v, xc)
-    u_sol.append(u_soln)
-
-u_sol = np.asarray(u_sol)
-u_sol = u_sol[:, :, 1:-2]
-x = x[1:-2]
-velocity = params[:,1]
-
+data =  np.load(data_loc + '/Burgers_1d.npz')
+u_sol  = data['u']
+x = data['x']
+dt = data['dt']
 # %% 
 u = torch.tensor(u_sol, dtype=torch.float32)
 u = u.permute(0, 2, 1) #only for FNO
 u = u.unsqueeze(1)
 x_grid = x
-t_grid = t
 # %% 
-ntrain = 80
-ntest = 20
-S = Nx  #Grid Size
+ntrain = 800
+ntest = 200
 
 #Extracting configuration files
 T_in = configuration['T_in']

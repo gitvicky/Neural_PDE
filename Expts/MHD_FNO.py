@@ -19,11 +19,11 @@ configuration = {"Case": 'MHD',
                  "Physics Normalisation": 'No',
                  "Normalisation Strategy": 'Min-Max',
                  "T_in": 10,    
-                 "T_out": 40,
+                 "T_out": 20,
                  "Step": 5,
-                 "Width_time": 8, 
+                 "Width_time": 16, 
                  "Width_vars": 0,  
-                 "Modes": 4,
+                 "Modes": 8,
                  "Variables":6, 
                  "Loss Function": 'LP',
                  "UQ": 'None', #None, Dropout
@@ -104,12 +104,12 @@ def stacked_fields(variables):
     stack = torch.stack(stack, dim=1)
     return stack
 
-vars = stacked_fields([rho, u, v, p, Bx, By])
-field = ['rho', 'u', 'v', 'p', 'Bx', 'By'],
+x_slice = 1 
+vars = stacked_fields([rho, u, v, p, Bx, By])[:, :, ::x_slice, ::x_slice, :]
+field = ['rho', 'u', 'v', 'p', 'Bx', 'By']
 # %% 
 ntrain = 800
 ntest = 200
-S = 33 #Grid Size
 
 #Extracting configuration files
 T_in = configuration['T_in']
@@ -255,7 +255,7 @@ for var in range(num_vars):
     pcm = ax.imshow(u_field[..., 0], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_1, vmax=v_max_1)
     # ax.title.set_text('Initial')
     ax.title.set_text('t=' + str(T_in))
-    ax.set_ylabel('Solution -  ' + configuration['Field'][var])
+    ax.set_ylabel('Solution -  ' + field[var])
     fig.colorbar(pcm, pad=0.05)
 
     ax = fig.add_subplot(2, 3, 2)
