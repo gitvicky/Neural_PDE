@@ -438,14 +438,14 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 
 
 # %%
-#Example usage
-N = 128 #number of grid points
-boxsize = 1.0 #domain size
-tEnd = 0.5 #simulation timescale
-a, b, c = 1.0, 1.0, 1.0 #parameterisation of initial vx, vy, p
-dx = boxsize/N
+# #Example usage
+# N = 128 #number of grid points
+# boxsize = 1.0 #domain size
+# tEnd = 0.5 #simulation timescale
+# a, b, c = 1.0, 1.0, 1.0 #parameterisation of initial vx, vy, p
+# dx = boxsize/N
 
-rho, u, v, p, bx, by, dt, err = solve(N, boxsize, tEnd, a, b, c)
+# rho, u, v, p, bx, by, dt, err = solve(N, boxsize, tEnd, a, b, c)
 
 # %%
 

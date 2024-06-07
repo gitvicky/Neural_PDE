@@ -120,12 +120,12 @@ class Conv_Diff_1d:
             
             u_dataset[ii+1] = u
 
-        return u_dataset, self.D, self.dD_dx
+        return u_dataset, self.D, self.dD_dx, self.x, self.dt
     
 
 if __name__ == "__main__":
     #Example Usage
-    Nx = 201 #Number of x-points
+    Nx = 256 #Number of x-points
     Nt = 5000 #Number of time instances 
     x_min = 0.0 #Min of X-range 
     x_max = 10.0 #Max of X-range 
@@ -136,5 +136,5 @@ if __name__ == "__main__":
     sigma = 0.5 #Gaussian Variance
 
     sim = Conv_Diff_1d(Nx, Nt, x_min, x_max, t_end, D_damp, c, mu, sigma) 
-    u_sol, D, D_x = sim.solve()
+    u_sol, D, D_x, x, dt = sim.solve()
 # %%
