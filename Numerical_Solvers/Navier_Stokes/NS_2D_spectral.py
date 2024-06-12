@@ -18,20 +18,20 @@ div(v) = 0
 
 import numpy as np
 import matplotlib.pyplot as plt
-import logging
+# import logging
 
-logger = logging.getLogger("test")
-logger.setLevel(level=logging.DEBUG)
+# logger = logging.getLogger("test")
+# logger.setLevel(level=logging.DEBUG)
 
-logFileFormatter = logging.Formatter(
-    fmt=f"%(levelname)s %(asctime)s (%(relativeCreated)d) \t %(pathname)s F%(funcName)s L%(lineno)s - %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-)
-fileHandler = logging.FileHandler(filename='test.log')
-fileHandler.setFormatter(logFileFormatter)
-fileHandler.setLevel(level=logging.INFO)
+# logFileFormatter = logging.Formatter(
+#     fmt=f"%(levelname)s %(asctime)s (%(relativeCreated)d) \t %(pathname)s F%(funcName)s L%(lineno)s - %(message)s",
+#     datefmt="%Y-%m-%d %H:%M:%S",
+# )
+# fileHandler = logging.FileHandler(filename='test.log')
+# fileHandler.setFormatter(logFileFormatter)
+# fileHandler.setLevel(level=logging.INFO)
 
-logger.addHandler(fileHandler)
+# logger.addHandler(fileHandler)
 # %% 
 #Solver Functions 
 
@@ -151,12 +151,12 @@ class Navier_Stokes_2d:
 			self.t += self.dt
 			print("Iteration: {}, Time: {}, Residuals {}".format(ii, self.t , cont))
 
-			if cont> 1: 
-				logger.error('Numerical instability occured ! ')
-				error =1 
-				# break
-			else:
-				logger.info("Iteration: {}, Time: {}, Residuals {}".format(ii, self.t , cont))
+			# if cont> 1: 
+			# 	logger.error('Numerical instability occured ! ')
+			# 	error =1 
+			# 	# break
+			# else:
+			# 	logger.info("Iteration: {}, Time: {}, Residuals {}".format(ii, self.t , cont))
 
 			
 			u_list.append(self.vx)

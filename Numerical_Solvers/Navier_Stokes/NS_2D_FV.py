@@ -323,6 +323,8 @@ def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, vy_ic=0.1, p_i
 
 
 # %%
+from scipy.interpolate import griddata
+
 #Example Usage 
 
 # # Simulation parameters
@@ -336,6 +338,17 @@ def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, vy_ic=0.1, p_i
 # p_ic                   = 2.5 # initial pressure value 
 
 # rho, uu, vv, pp, dx, dtt = KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, vy_ic, p_ic)
+
+# # #Trying to push to equidistant temporal Grids
+# # t = np.cumsum(dtt)
+# # x = np.linspace(0.5*dx, boxsize-0.5*dx, N)
+# # y = x 
+# # tt, xx, yy = np.meshgrid(t, x, y)
+# # t_new = np.linspace(tStart, tEnd, num=1000)  # Adjust the number of points as needed
+
+# # rho_new = griddata((tt.ravel(), xx.ravel(), yy.ravel()), rho.ravel(),
+# # 					(t, x, y), method='linear')
+
 
 # plt.imshow(rho[-1])
 # plt.colorbar()

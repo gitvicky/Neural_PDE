@@ -21,7 +21,7 @@ solver = 'FV' #Finite Volume Scheme
 # %%
 start_time = time()
 
-n_sims = 10
+n_sims = 2
 
 if solver == 'Spectral':
     lb = np.asarray([0.5, 0.5]) #a, b
@@ -100,7 +100,8 @@ if solver == 'FV':
     ii=0
     while ii < n_sims:
         rho, uu, vv, pp, dx, dtt = KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, params[ii, 0], params[ii, 1])
-        np.savez(os.getcwd() + "/NS_FV_" + str(ii) + ".npz", u=uu[::t_slice, ::x_slice, ::x_slice], v=vv[::t_slice, ::x_slice, ::x_slice], p=pp[::t_slice, ::x_slice, ::x_slice], w=w[::t_slice, ::x_slice, ::x_slice], x=x[::x_slice], dtt=dtt[::t_slice])
+        np.savez(os.getcwd() + "/NS_FV_" + str(ii) + ".npz", u=uu[::t_slice, ::x_slice, ::x_slice], v=vv[::t_slice, ::x_slice, ::x_slice], p=pp[::t_slice, ::x_slice, ::x_slice], rho=rho[::t_slice, ::x_slice, ::x_slice], dx=dx*x_slice, dtt=dtt[::t_slice])
+        ii+=1
 
     end_time = time()
     print("Total Time : " + str(end_time - start_time))
@@ -123,7 +124,7 @@ if solver == 'FV':
         except:
             pass
         
-    x = x[::x_slice]
+    dx = dx * x_slice
     dt = dtt[::t_slice]
 
     u = np.asarray(u_list)
@@ -131,4 +132,6 @@ if solver == 'FV':
     p = np.asarray(p_list)
     rho = np.asarray(rho_list)
 
-    np.savez(os.getcwd() + "/NS_FV_combined.npz", u=u, v=v, p=p, rho=rho, x=x, dtt=dtt)
+    np.savez(os.getcwd() + "/NS_FV_combined.npz", u=u, v=v, p=p, rho=rho, dx=dx, dtt=dtt)
+
+    # %% 
