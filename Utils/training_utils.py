@@ -158,22 +158,13 @@ def train_one_epoch_PINN(model, train_loader, test_loader, loss_func, optimizer)
 ################################################################
 # Training - Coordinate based MLPs (INRs) with context
 ################################################################
-def train_one_epoch_INR(model, coords, num_points, train_loader, test_loader, loss_func, optimizer):
+def train_one_epoch_INR(model, train_loader, test_loader, loss_func, optimizer):
     model.train()
     train_loss = 0
     for xx, yy in train_loader:
         optimizer.zero_grad()
+        xx, yy = xx.to(device), yy.to(device)
 
-        #Random subset of points 
-        idx = np.random.randint(len(coords), size=num_points)
-
-        xx = torch.tile(torch.unsqueeze(xx,1), (1,num_points,1))
-        batch_size = xx.shape[0]
-        yy = yy[:,idx,:].to(device)
-        co = torch.tile(coords[idx], (batch_size,1,1))
-        
-        xx = torch.hstack((xx.flatten(0,1), co.flatten(0,1))).to(device)
-        yy = yy.flatten(0,1).to(device)
         
         out, _ = model(xx)
         loss = loss_func(out, yy)
@@ -188,20 +179,10 @@ def train_one_epoch_INR(model, coords, num_points, train_loader, test_loader, lo
     test_loss = 0
     with torch.no_grad():
         for xx, yy in test_loader:
-            
-            #Random subset of points 
-            idx = np.random.randint(len(coords), size=num_points)
-
-            xx = torch.tile(torch.unsqueeze(xx,1), (1,num_points,1))
-            batch_size = xx.shape[0]
-            yy = yy[:,idx,:].to(device)
-            co = torch.tile(coords[idx], (batch_size,1,1))
-            
-            xx = torch.hstack((xx.flatten(0,1), co.flatten(0,1))).to(device)
-            yy = yy.flatten(0,1).to(device)
+            xx, yy = xx.to(device), yy.to(device)
 
             out, _ = model(xx)
-            test_loss += (out.reshape(batch_size, -1) -  yy.reshape(batch_size, -1)).pow(2).mean().item()
+            test_loss += (out.reshape(xx.shape[0], -1) -  yy.reshape(xx.shape[0], -1)).pow(2).mean().item()
 
     return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
 

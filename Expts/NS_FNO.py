@@ -108,7 +108,6 @@ field = ['u', 'v', 'p', 'w']
 # %% 
 ntrain = 800
 ntest = 200
-S = 33 #Grid Size
 
 #Extracting configuration files
 T_in = configuration['T_in']

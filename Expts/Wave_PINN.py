@@ -11,7 +11,7 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'Siren',
-                 "Epochs": 10000,
+                 "Epochs": 1000,
                  "Batch Size": 50000,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -34,7 +34,7 @@ configuration = {"Case": 'Wave',
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'INR', 'PINN'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
 run.save(os.path.abspath(__file__), 'code')
@@ -65,7 +65,7 @@ from Neural_PDE.Utils.processing_utils import *
 from Neural_PDE.Utils.training_utils import * 
 
 # %% 
-#Settung up locations. 
+#Setting up locations. 
 file_loc = os.getcwd()
 data_loc = os.path.dirname(os.getcwd()) + '/Data'
 model_loc = file_loc + '/Weights'
@@ -81,10 +81,10 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ################################################################
 
 t1 = default_timer()
-from Neural_PDE.Numerical_Solvers.Wave import Wave_2D_Spectral
+from Neural_PDE.Numerical_Solvers.Wave.Wave_2D_Spectral import * 
 
 #Example of Usage
-Nx = 30 # Mesh Discretesiation 
+Nx = 32 # Mesh Discretesiation 
 Nt = 100 #Max time
 x_min = -1.0 # Minimum value of x
 x_max = 1.0 # maximum value of x
@@ -96,11 +96,10 @@ aa = 0.25
 bb = 0.25
 c = 1.0 # Wave Speed <=1.0
 
-#Initialising the Solver
-solver = Wave_2D_Spectral.Wave_2D(Nx, Nt, x_min, x_max, tend, c, Lambda, aa , bb)
 
-#Solving and obtaining the solution. 
-x, y, t, u_sol = solver.solve() #solution shape -> t, x, y
+#Initialising the Solver
+solver = Wave_2D(Nx, x_min, x_max, tend, c)
+x, y, t, u_sol = solver.solve(Lambda, aa, bb)
 
 u = torch.tensor(u_sol, dtype=torch.float32)
 u = u.permute(1,2,0)
@@ -109,7 +108,7 @@ xx, yy, tt = np.meshgrid(x, y, t)
 
 #Stacked cooredinate values and corresponding field values stacked. 
 aa = np.vstack((xx.flatten(), yy.flatten(), tt.flatten() )).T
-uu = u.reshape(u.shape[0], int(u.shape[1]*u.shape[2]*u.shape[3])).unsqueeze(-1)
+uu = u.flatten().unsqueeze(-1)
 
 #coordinates 
 coords = torch.tensor(aa, dtype=torch.float32)
@@ -117,7 +116,7 @@ coords = torch.tensor(aa, dtype=torch.float32)
 # %% 
 ntrain = 1 #Only 1 simulation is used. 
 ntest = 1 #Only 1 simulation is used. 
-S = 33 #Grid Size
+S = Nx #Grid Size
 
 #Extracting configuration files
 num_coords = configuration['Coords']
@@ -180,11 +179,11 @@ train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
 
 #Saving Normalisation 
-saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz', 
+saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz'
 
 np.savez(saved_normalisations, 
         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
-        out_a=u_normalizer.a.numpy(), out_b=a_normalizer.b.numpy()
+        out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
         )
 
 run.save(saved_normalisations, 'output')
@@ -212,6 +211,12 @@ optimizer = torch.optim.Adam(model.parameters(), lr=configuration['Learning Rate
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=configuration['Scheduler Step'], gamma=configuration['Scheduler Gamma'])
 epochs = configuration['Epochs']
 
+def gradient(y, x, grad_outputs=None):
+    if grad_outputs is None:
+        grad_outputs = torch.ones_like(y)
+    grad = torch.autograd.grad(y, [x], grad_outputs=grad_outputs, create_graph=True)[0]
+    return grad
+
 def loss_func(model, xx):
     outs, coords = model(xx)
     derivs = gradient(gradient(outs, coords), coords)
@@ -223,14 +228,20 @@ def loss_func(model, xx):
 #Training Loop 
 ####################################
 start_time = default_timer()
+model.train()
 for ep in range(epochs): #Training Loop - Epochwise
-    model.train()
+    optimizer.zero_grad()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch_PINN(model, train_loader, test_loader, loss_func, optimizer)
+    xx, yy = train_a, train_u
+    xx, yy = xx.to(device), yy.to(device)
+    loss = loss_func(model, xx)
+    # train_loss, test_loss = train_one_epoch_PINN(model, train_loader, test_loader, loss_func, optimizer)
     t2 = default_timer()
 
-    train_loss = train_loss / ntrain
-    test_loss = test_loss / ntest
+    loss.backward()
+    optimizer.step()
+    train_loss = loss.item()#train_loss / ntrain
+    test_loss = 0#test_loss / ntest
 
     print(f"Epoch {ep}, Time Taken: {round(t2-t1,2)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss,5)}")
     run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})

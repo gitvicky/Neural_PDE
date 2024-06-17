@@ -217,58 +217,9 @@ class FourierNet(MFNBase):
                 for _ in range(n_layers + 1)
             ]
         )
-
-class GaborLayer(nn.Module):
-    """
-    Gabor-like filter as used in GaborNet.
-    """
-
-    def __init__(self, in_features, out_features, weight_scale, alpha=1.0, beta=1.0):
-        super().__init__()
-        self.linear = nn.Linear(in_features, out_features)
-        self.mu = nn.Parameter(2 * torch.rand(out_features, in_features) - 1)
-        self.gamma = nn.Parameter(
-            torch.distributions.gamma.Gamma(alpha, beta).sample((out_features,))
-        )
-        self.linear.weight.data *= weight_scale * torch.sqrt(self.gamma[:, None])
-        self.linear.bias.data.uniform_(-np.pi, np.pi)
-        return
-
-    def forward(self, x):
-        D = (
-            (x ** 2).sum(-1)[..., None]
-            + (self.mu ** 2).sum(-1)[None, :]
-            - 2 * x @ self.mu.T
-        )
-        return torch.sin(self.linear(x)) * torch.exp(-0.5 * D * self.gamma[None, :])
-
-
-class GaborNet(MFNBase):
-    def __init__(
-        self,
-        in_size,
-        hidden_size,
-        out_size,
-        n_layers=3,
-        input_scale=256.0,
-        weight_scale=1.0,
-        alpha=6.0,
-        beta=1.0,
-        bias=True,
-        output_act=False,
-    ):
-        super().__init__(
-            hidden_size, out_size, n_layers, weight_scale, bias, output_act
-        )
-        self.filters = nn.ModuleList(
-            [
-                GaborLayer(
-                    in_size,
-                    hidden_size,
-                    input_scale / np.sqrt(n_layers + 1),
-                    alpha / (n_layers + 1),
-                    beta,
-                )
-                for _ in range(n_layers + 1)
-            ]
-        )
+    
+    def count_params(self):
+        c = 0
+        for p in self.parameters():
+            c += reduce(operator.mul, list(p.size()))
+        return c

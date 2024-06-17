@@ -10,10 +10,10 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 # %%
 configuration = {"Case": 'Wave',
                  "Field": 'u',
-                 "Model": 'Siren',
+                 "Model": 'Siren', #Siren or MFN
                  "Epochs": 500,
                  "Batch Size": 200, #Actual batch will be Batch Size * Points
-                 "Points": 1000, #Points sampled for from the grid.  
+                 "Points": 10000, #Points sampled for from the grid.  
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
                  "Scheduler Step": 100,
@@ -35,7 +35,7 @@ configuration = {"Case": 'Wave',
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'AR'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'INR', configuration['Model']], metadata=configuration)
 
 # Saving the current run file and the git hash of the repo
 run.save(os.path.abspath(__file__), 'code')
@@ -96,7 +96,7 @@ n_sims = len(u_sol)
 # %% 
 ntrain = 800
 ntest = 200
-S = 33 #Grid Size
+S = u_sol.shape[-1]#Grid Size
 
 #Extracting configuration files
 num_coords = configuration['Coords']
@@ -112,7 +112,7 @@ t = t[:T_range]
 u = u[...,:T_range]
 xx, yy, tt = np.meshgrid(x, y, t)
 
-#Stacked cooredinate values and corresponding field values stacked. 
+#Stacked coordinate values and corresponding field values stacked. 
 aa = np.vstack((xx.flatten(), yy.flatten(), tt.flatten() )).T
 uu = u.reshape(u.shape[0], int(u.shape[1]*u.shape[2]*u.shape[3])).unsqueeze(-1)
 
@@ -163,11 +163,11 @@ train_u = u_normalizer.encode(train_u)
 test_u_encoded = u_normalizer.encode(test_u)
 
 #Saving Normalisation 
-saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz', 
+saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' + run.name + '_' + 'norms.npz'
 
 np.savez(saved_normalisations, 
         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
-        out_a=u_normalizer.a.numpy(), out_b=a_normalizer.b.numpy()
+        out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
         )
 
 run.save(saved_normalisations, 'output')
@@ -184,7 +184,10 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = Siren(in_features=num_coords+context_len, hidden_features=width, hidden_layers=layers, out_features=num_vars)
+if configuration['Model'] == 'Siren':
+    model = Siren(in_features=num_coords+context_len, hidden_features=width, hidden_layers=layers, out_features=num_vars)
+elif configuration['Model'] == 'MFN':
+    model = FourierNet(in_size=num_coords+context_len, hidden_size=width, n_layers=layers, out_size=num_vars)
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})
@@ -204,7 +207,8 @@ start_time = default_timer()
 for ep in range(epochs): #Training Loop - Epochwise
     model.train()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch(model, train_loader, test_loader, loss_func, optimizer)
+    train_loss, test_loss = train_one_epoch_INR(model, train_loader, test_loader, loss_func, optimizer)
+    
     t2 = default_timer()
 
     train_loss = train_loss / ntrain
@@ -227,7 +231,7 @@ run.save(saved_model, 'output')
 #Validation using newly generated simulation data.
 
 #Example of Usage
-Nx = 33 # Mesh Discretesiation 
+Nx = 64 # Mesh Discretesiation 
 Nt = 100 #Max time
 x_min = -1.0 # Minimum value of x
 x_max = 1.0 # maximum value of x
@@ -240,11 +244,10 @@ bb = 0.25
 c = 1.0 # Wave Speed <=1.0
 
 #Initialising the Solver
-from Neural_PDE.Numerical_Solvers.Wave import Wave_2D_Spectral
-solver = Wave_2D_Spectral.Wave_2D(Nx, Nt, x_min, x_max, tend, c, Lambda, aa , bb)
+from Neural_PDE.Numerical_Solvers.Wave.Wave_2D_Spectral import * 
+solver = Wave_2D(Nx, x_min, x_max, tend, c)
+x, y, t, u_sol = solver.solve(Lambda, aa, bb)
 
-#Solving and obtaining the solution. 
-x, y, t, u_sol = solver.solve() #solution shape -> t, x, y
 u = torch.tensor(u_sol, dtype=torch.float32)
 u = u.permute(1,2,0)
 t = t[:T_range]
@@ -282,8 +285,8 @@ pred_set = u_normalizer.decode(pred_set_encoded.to(device)).cpu().detach().numpy
 
 # Rearranging the Predictions for Evaluation. 
 ntest = 1
-test_u = test_u.reshape(ntest, num_vars, S, S, T_range)
-pred_set = pred_set.reshape(ntest, num_vars, S, S, T_range)
+test_u = test_u.reshape(ntest, num_vars, Nx, Nx, T_range)
+pred_set = pred_set.reshape(ntest, num_vars, Nx, Nx, T_range)
 # %% 
 #Plotting the performance
 idx = 0

@@ -47,7 +47,7 @@ class Wave_2D:
         self.vvold = self.vv.copy()
         
         self.nstep = int(self.tend / self.dt) + 1
-        self.t = np.arange(0,self.tend+self.dt,self.dt)
+        self.t = np.arange(0,self.tend,self.dt)
 
     def solve(self, Lambda, aa, bb):
 
