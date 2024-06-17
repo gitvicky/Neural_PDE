@@ -79,7 +79,7 @@ class Advection_1d:
         
         # Print the Courant number
         courant_number = self.v * self.dt / self.dx
-        print(f"Courant number: {courant_number}")
+        # print(f"Courant number: {courant_number}")
         
         # Assert that the CFL condition is not violated
         assert courant_number <= 1, "CFL condition violated"
