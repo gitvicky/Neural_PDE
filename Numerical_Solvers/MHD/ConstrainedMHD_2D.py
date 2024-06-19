@@ -8,6 +8,19 @@ Main Authors: @PMocz
 Mod Authors: @vgopakum
 
 """
+# %% 
+# 
+import matplotlib.pyplot as plt
+import numpy as np
+
+"""
+Create Your Own Constrained Transport Magnetohydrodynamics Simulation (With Python)
+Philip Mocz (2023), @PMocz
+
+Simulate the Orszag-Tang vortex MHD problem
+
+"""
+
 
 def getCurl(Az, dx):
 	"""
@@ -287,9 +300,9 @@ def getFlux(rho_L, rho_R, vx_L, vx_R, vy_L, vy_R, P_L, P_R, Bx_L, Bx_R, By_L, By
 
 
 
-def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initial conditions for u,v,p
+def solve(N=128, boxsize=1.0, tEnd=0.5, a=1.0, b=1.0, c=1.0):
 	""" Finite Volume simulation """
-	
+
 	rho_list = []
 	u_list = []
 	v_list = []
@@ -298,17 +311,17 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 	by_list = []
 	dt_list = []
 	err = 0 
-
+	
 	# Simulation parameters
 	N                      = N # resolution
-	boxsize                = L
+	boxsize                = boxsize
 	gamma                  = 5/3 # ideal gas gamma
 	courant_fac            = 0.4
 	t                      = 0
-	tEnd                   = tEnd
+	tEnd                   = 0.5
 	tOut                   = 0.01 # draw frequency
 	useSlopeLimiting       = True
-	plotRealTime = False # switch on for plotting as the simulation goes along
+	plotRealTime = True # switch on for plotting as the simulation goes along
 	
 	# Mesh
 	dx = boxsize / N
@@ -336,9 +349,9 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 	# Get conserved variables
 	Mass, Momx, Momy, Energy = getConserved( rho, vx, vy, P, Bx, By, gamma, vol )
 	
-	# # prep figure
-	# fig = plt.figure(figsize=(4,4), dpi=80)
-	# outputCount = 1
+	# prep figure
+	fig = plt.figure(figsize=(4,4), dpi=80)
+	outputCount = 1
 	
 	# Simulation Main Loop
 	while t < tEnd:
@@ -353,9 +366,9 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 		cf = np.sqrt( 0.5*(c0**2+ca**2) + 0.5*np.sqrt((c0**2+ca**2)**2) )
 		dt = courant_fac * np.min( dx / (cf + np.sqrt(vx**2+vy**2)) )
 		plotThisTurn = False
-		# if t + dt > outputCount*tOut:
-		# 	dt = outputCount*tOut - t
-		# 	plotThisTurn = True
+		if t + dt > outputCount*tOut:
+			dt = outputCount*tOut - t
+			plotThisTurn = True
 		
 		# calculate gradients
 		rho_dx, rho_dy = getGradient(rho, dx)
@@ -403,28 +416,6 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 		
 		# update time
 		t += dt
-		
-		# check div B
-		divB = getDiv(bx,by,dx)
-		mean_divB = np.mean(np.abs(divB))
-		print("t = ", t, ", mean |divB| = ", mean_divB)
-
-		if mean_divB > 0 : 
-			err = 0
-		
-		# # plot in real time
-		# if (plotRealTime and plotThisTurn): #or (t >= tEnd):
-		# 	plt.cla()
-		# 	plt.imshow(rho.T, cmap='jet')
-		# 	plt.clim(0.06, 0.5)
-		# 	ax = plt.gca()
-		# 	ax.invert_yaxis()
-		# 	ax.get_xaxis().set_visible(False)
-		# 	ax.get_yaxis().set_visible(False)	
-		# 	ax.set_aspect('equal')	
-		# 	plt.pause(0.001)
-		# 	outputCount += 1
-			
 
 		rho_list.append(rho)
 		u_list.append(vx)
@@ -433,19 +424,44 @@ def solve(N, L, tEnd, a=1, b=1, c=1): #a,b,care parameterisations for the initia
 		bx_list.append(Bx)
 		by_list.append(By)
 		dt_list.append(dt)
+		
+		# check div B
+		divB = getDiv(bx,by,dx)
+		print("t = ", t, ", mean |divB| = ", np.mean(np.abs(divB)))
+		
+		# plot in real time
+		if (plotRealTime and plotThisTurn) or (t >= tEnd):
+			plt.cla()
+			plt.imshow(rho.T, cmap='jet')
+			plt.clim(0.06, 0.5)
+			ax = plt.gca()
+			ax.invert_yaxis()
+			ax.get_xaxis().set_visible(False)
+			ax.get_yaxis().set_visible(False)	
+			ax.set_aspect('equal')	
+			plt.pause(0.001)
+			outputCount += 1
+			
+	print("done!")
+	
+	# Save figure
+	plt.savefig('constrainedtransport.png',dpi=240)
+	plt.show()
 
-	return np.asarray(rho_list), np.asarray(u_list), np.asarray(v_list), np.asarray(p_list), np.asarray(bx_list), np.asarray(by_list), np.asarray(dt_list), err
+
+	return np.asarray(rho_list), np.asarray(u_list), np.asarray(v_list), np.asarray(p_list), np.asarray(bx_list), np.asarray(by_list), np.asarray(dt_list), xlin, err
+
 
 
 # %%
-# #Example usage
-# N = 128 #number of grid points
-# boxsize = 1.0 #domain size
-# tEnd = 0.5 #simulation timescale
-# a, b, c = 1.0, 1.0, 1.0 #parameterisation of initial vx, vy, p
-# dx = boxsize/N
+#Example usage
+N = 128 #number of grid points
+boxsize = 1.0 #domain size
+tEnd = 0.5 #simulation timescale
+a, b, c = 1.0, 1.0, 1.0 #parameterisation of initial vx, vy, p
+dx = boxsize/N
 
-# rho, u, v, p, bx, by, dt, err = solve(N, boxsize, tEnd, a, b, c)
+rho, u, v, p, bx, by, dt, x, err = solve(N, boxsize, tEnd, a, b, c)
 
 # %%
 
