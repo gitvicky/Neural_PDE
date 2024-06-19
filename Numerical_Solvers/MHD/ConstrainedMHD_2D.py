@@ -7,6 +7,8 @@ Constrained transport MHD simultion modelling the Orszag-Tang vortex simulation.
 Main Authors: @PMocz
 Mod Authors: @vgopakum
 
+
+dt is fixed to be 1e-4. rather than a variable timestep. 
 """
 # %% 
 # 
@@ -364,7 +366,8 @@ def solve(N=128, boxsize=1.0, tEnd=0.5, a=1.0, b=1.0, c=1.0):
 		c0 = np.sqrt( gamma*(P-0.5*(Bx**2+By**2))/rho )
 		ca = np.sqrt( (Bx**2+By**2)/rho )
 		cf = np.sqrt( 0.5*(c0**2+ca**2) + 0.5*np.sqrt((c0**2+ca**2)**2) )
-		dt = courant_fac * np.min( dx / (cf + np.sqrt(vx**2+vy**2)) )
+		# dt = courant_fac * np.min( dx / (cf + np.sqrt(vx**2+vy**2)) )#variable timestep
+		dt = 1e-4#Fixed timestep
 		plotThisTurn = False
 		if t + dt > outputCount*tOut:
 			dt = outputCount*tOut - t

@@ -23,7 +23,7 @@ tEnd = 0.5
 # %%
 start_time = time()
 
-n_sims = 10
+n_sims = 2
 
 lb = np.asarray([0.5, 0.5, 0.5]) #a, b, c
 ub = np.asarray([1.0, 1.0, 1.0])
@@ -39,7 +39,7 @@ def update_status_bar(progress):
     sys.stdout.write(f'\rProgress: [{bar}] {progress}%')
     sys.stdout.flush()
 # %%
-t_len = 400
+t_len = 5041
 t_slice = 10 
 x_slice = 1
 
@@ -49,7 +49,7 @@ while ii < n_sims:
     rho, u, v, p, Bx, By, dt, x, err = solve(N, boxsize, tEnd, params[ii, 0], params[ii, 1], params[ii, 2])
     rho, u, v, p, Bx, By, dt = rho[:t_len], u[:t_len], v[:t_len], p[:t_len], Bx[:t_len], By[:t_len], dt[:t_len]
     if err == 0:
-        np.savez(os.getcwd() + "/Constrained_MHD_" + str(ii) + ".npz", rho=rho[::t_slice, ::x_slice, ::x_slice], u=u[::t_slice, ::x_slice, ::x_slice], v=v[::t_slice, ::x_slice, ::x_slice], p=p[::t_slice, ::x_slice, ::x_slice], Bx=Bx[::t_slice, ::x_slice, ::x_slice], By=By[::t_slice, ::x_slice, ::x_slice], x=x[::x_slice], dt=dt[::t_slice])
+        np.savez(os.getcwd() + "/Constrained_MHD_" + str(ii) + ".npz", rho=rho[::t_slice, ::x_slice, ::x_slice], u=u[::t_slice, ::x_slice, ::x_slice], v=v[::t_slice, ::x_slice, ::x_slice], p=p[::t_slice, ::x_slice, ::x_slice], Bx=Bx[::t_slice, ::x_slice, ::x_slice], By=By[::t_slice, ::x_slice, ::x_slice], x=x[::x_slice], dt=dt[0]*t_slice)
         ii+=1
         progress = int(ii / n_sims * 100)
         update_status_bar(progress)
@@ -67,7 +67,6 @@ v_list = []
 p_list = []
 Bx_list = []
 By_list = []
-dt_list = []
 
 for ii in tqdm(range(n_sims)):
     rho_list.append(np.load(data_loc + str(ii) + ".npz")['u'])
@@ -76,7 +75,6 @@ for ii in tqdm(range(n_sims)):
     p_list.append(np.load(data_loc + str(ii) + ".npz")['p'])
     Bx_list.append(np.load(data_loc + str(ii) + ".npz")['Bx'])
     By_list.append(np.load(data_loc + str(ii) + ".npz")['By'])
-    dt_list.append(np.load(data_loc + str(ii) + ".npz")['dt'])
     try: 
         os.remove(data_loc + str(ii) + ".npz")
     except:
@@ -89,13 +87,12 @@ v = np.asarray(v_list)
 p = np.asarray(p_list)
 Bx = np.asarray(Bx_list)
 By = np.asarray(By_list)
-dt = np.asarray(dt_list)
 # %% 
 dx = boxsize / N
 vol = dx**2
 xlin = np.linspace(0.5*dx, boxsize-0.5*dx, N)
 x = xlin
 
-np.savez(os.getcwd() + "/Constrained_MHD_combined.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, t=dt)
+np.savez(os.getcwd() + "/Constrained_MHD_combined.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, dt=dt)
 
 # %%
