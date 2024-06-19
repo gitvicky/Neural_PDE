@@ -225,12 +225,30 @@ def train_one_epoch(model, train_loader, test_loader, loss_func, optimizer):
 ################################################################
 # Validation / Inference for INR / PINNs 
 ################################################################
-def validation(model, test_a, test_u):
-    test_a, test_u = test_a.to(device), test_u.to(device)
-    out, _ = model(test_a)
+def validation_INR(model, test_a, test_u):
+    with torch.no_grad():
+        test_a, test_u = test_a.to(device), test_u.to(device)
+        out, _ = model(test_a)
 
-    # Performance Metrics
-    MSE_error = (out - test_u).pow(2).mean()
-    MAE_error = torch.abs(out - test_u).mean()
+        # Performance Metrics
+        MSE_error = (out - test_u).pow(2).mean()
+        MAE_error = torch.abs(out - test_u).mean()
 
-    return out, MSE_error, MAE_error
+        return out, MSE_error, MAE_error
+
+
+def validation(model, test_loader):
+    mean_sq_err = 0
+    mean_abs_err = 0
+    outs = []
+    with torch.no_grad():
+        for xx, yy in test_loader:
+            xx, yy = xx.to(device), yy.to(device)
+            out = model(xx)
+            outs.append(out)
+
+            # Performance Metrics
+            mean_sq_err += (out - yy).pow(2).mean()
+            mean_abs_err = torch.abs(out - yy).mean()
+
+        return torch.stack(outs), mean_sq_err, mean_abs_err

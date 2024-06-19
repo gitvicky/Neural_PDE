@@ -21,7 +21,7 @@ solver = 'FV' #Finite Volume Scheme
 # %%
 start_time = time()
 
-n_sims = 2
+n_sims = 500
 
 if solver == 'Spectral':
     lb = np.asarray([0.5, 0.5]) #a, b
