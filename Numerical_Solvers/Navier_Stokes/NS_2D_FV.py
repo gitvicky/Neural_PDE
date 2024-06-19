@@ -256,6 +256,7 @@ def KelvinHelmholtz(N, boxsize, tStart, tEnd, gamma, courant_fac, vy_ic=0.1, p_i
 		
 		# get time step (CFL) = dx / max signal speed
 		dt = courant_fac * np.min( dx / (np.sqrt( gamma*P/rho ) + np.sqrt(vx**2+vy**2)) )
+		dt = 5e4 #Fixed TimeStep 
 		dtt.append(dt)
 		# plotThisTurn = False
 		# if t + dt > outputCount*tOut:

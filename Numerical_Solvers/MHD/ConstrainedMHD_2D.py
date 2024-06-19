@@ -464,7 +464,7 @@ tEnd = 0.5 #simulation timescale
 a, b, c = 1.0, 1.0, 1.0 #parameterisation of initial vx, vy, p
 dx = boxsize/N
 
-rho, u, v, p, bx, by, dt, x, err = solve(N, boxsize, tEnd, a, b, c)
+# rho, u, v, p, bx, by, dt, x, err = solve(N, boxsize, tEnd, a, b, c)
 
 # %%
 

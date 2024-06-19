@@ -23,7 +23,7 @@ tEnd = 0.5
 # %%
 start_time = time()
 
-n_sims = 2
+n_sims = 500
 
 lb = np.asarray([0.5, 0.5, 0.5]) #a, b, c
 ub = np.asarray([1.0, 1.0, 1.0])
