@@ -40,7 +40,7 @@ def update_status_bar(progress):
     sys.stdout.flush()
 # %%
 t_len = 5041
-t_slice = 10 
+t_slice = 25
 x_slice = 1
 
 #Running the simulation. 

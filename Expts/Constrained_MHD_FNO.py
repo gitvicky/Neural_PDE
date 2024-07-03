@@ -93,7 +93,7 @@ By  = data['By'].astype(np.float32)
 
 x = data['x'].astype(np.float32)
 y = data['x'].astype(np.float32)
-t = data['t'].astype(np.float32)
+dt = data['dt'].astype(np.float32)
 
 def stacked_fields(variables):
     stack = []

@@ -152,10 +152,10 @@ class FNO_multi2d(nn.Module):
         self.fc2_time = nn.Linear(256, self.step)
 
         self.activation = torch.nn.GELU()
+
     def forward(self, x):
         grid = self.get_grid(x.shape, x.device)
         x = torch.cat((x, grid), dim=-1)
-
         x = self.fc0_time(x)
         x = x.permute(0, 4, 1, 2, 3)
         grid = grid.permute(0, 4, 1, 2, 3)
