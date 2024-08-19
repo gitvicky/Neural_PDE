@@ -9,7 +9,7 @@ FNO modelled over the 2D Navier-Stokes equations auto-regressively
 configuration = {"Case": 'Navier-Stokes',
                  "Field": 'u, v, p, w',
                  "Model": 'FNO',
-                 "Epochs": 500,
+                 "Epochs": 250,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -18,9 +18,9 @@ configuration = {"Case": 'Navier-Stokes',
                  "Activation": 'GeLU',
                  "Physics Normalisation": 'No',
                  "Normalisation Strategy": 'Min-Max',
-                 "T_in": 10,    
-                 "T_out": 40,
-                 "Step": 10,
+                 "T_in": 1,    
+                 "T_out": 20,
+                 "Step": 1,
                  "Width_time": 16, 
                  "Width_vars": 0,  
                  "Modes": 8,
@@ -33,10 +33,10 @@ configuration = {"Case": 'Navier-Stokes',
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'Tests', 'AR'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'PIUQ', 'AR', 'NS'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
-run.save(os.path.abspath(__file__), 'code')
+run.save_file(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
@@ -84,13 +84,13 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 t1 = default_timer()
 data =  np.load(data_loc + '/NS_Spectral_combined.npz')
 
-u = data['u'].astype(np.float32)
-v = data['v'].astype(np.float32)
-p = data['p'].astype(np.float32)
-w = data['w'].astype(np.float32)
+u = data['u'].astype(np.float32)[:, ::2]
+v = data['v'].astype(np.float32)[:, ::2]
+p = data['p'].astype(np.float32)[:, ::2]
+w = data['w'].astype(np.float32)[:, ::2]
 x = data['x'].astype(np.float32)
 y = data['x'].astype(np.float32)
-dt = data['dt'].astype(np.float32)
+dt = data['dt'].astype(np.float32) * 2 
 
 def stacked_fields(variables):
     stack = []
@@ -106,7 +106,7 @@ vars = stacked_fields([u,v,p,w])
 field = ['u', 'v', 'p', 'w']
 
 # %% 
-ntrain = 800
+ntrain = 200
 ntest = 200
 
 #Extracting configuration files
@@ -159,7 +159,7 @@ np.savez(saved_normalisations,
         out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
         )
 
-run.save(saved_normalisations, 'output')
+run.save_file(saved_normalisations, 'output')
 # %%
 #Setting up the data loaders. 
 train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)
@@ -212,7 +212,7 @@ train_time = default_timer() - start_time
 #Saving the Model
 saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '.pth'
 torch.save( model.state_dict(), saved_model)
-run.save(saved_model, 'output')
+run.save_file(saved_model, 'output')
 # %%
 #Validation
 pred_set_encoded, mse, mae = validation_AR(model, test_a, test_u_encoded, step, T_out)
@@ -296,7 +296,7 @@ for var in range(num_vars):
 
     plot_name = plot_loc + '/' + field[var] + '_' + run.name + '.png'
     plt.savefig(plot_name)
-    run.save(plot_name, 'output')
+    run.save_file(plot_name, 'output')
 
 run.close()
 # %%

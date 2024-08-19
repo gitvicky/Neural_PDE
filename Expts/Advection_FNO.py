@@ -34,7 +34,7 @@ configuration = {"Case": 'Advection',
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'Tests', 'AR'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
 run.save(os.path.abspath(__file__), 'code')

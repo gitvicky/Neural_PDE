@@ -1,7 +1,7 @@
 """
 Created on 12 Dec 2023
 
-Obtaining the Physics Residuals as a measure of UQ on U-Net surrogate for 1D Advection Equation .
+Obtaining the Physics Residuals as a measure of UQ on DeepOnet surrogate for 1D Advection Equation .
 
 Equation: 
     U_t + v U_x = 0
@@ -12,19 +12,18 @@ Equation:
 #Training Configuration - used as the config file for simvue.
 configuration = {"Case": 'Advection',
                  "Field": 'u',
-                 "Model": 'UNet',
-                 "Epochs": 100,
-                 "Batch Size": 50,
+                 "Model": 'DeepOnet',
+                 "Epochs": 10000,
+                 "Batch Size": 20,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.001,
                  "Scheduler Step": 100,
                  "Scheduler Gamma": 0.5,
                  "Activation": 'Tanh',
                  "Normalisation Strategy": 'Identity',
-                 "T_in": 20,    
-                 "T_out": 30,
-                 "Step": 30,
-                 "Width": 32, 
+                 "Discrete_m": 100,
+                 "Layers": 4,
+                 "Width": 256, 
                  "Variables":1, 
                  "Noise":0.0, 
                  "Loss Function": 'MSE',
@@ -32,8 +31,8 @@ configuration = {"Case": 'Advection',
 
 import os
 from simvue import Run
-run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'U-Net'], metadata=configuration)
+run = Run(mode='disabled')
+run.init(folder="/Neural_PDE", tags=['NPDE', 'DeepONet', 'Tests'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
 run.save(os.path.abspath(__file__), 'code')
@@ -58,7 +57,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
 # %%
 #Importing the models and utilities. 
-from Neural_PDE.Models.UNet import *
+from Neural_PDE.Models.DeepOnet import *
 from Neural_PDE.Utils.processing_utils import * 
 from Neural_PDE.Utils.training_utils import * 
 
@@ -107,35 +106,39 @@ u_sol = np.asarray(u_sol)
 u_sol = u_sol[:, :, 1:-2]
 x = x[1:-2]
 velocity = params[:,1]
-
+u_sol = torch.tensor(u_sol, dtype=torch.float32)
 # %% 
-u = torch.tensor(u_sol, dtype=torch.float32)
-u = u.permute(0, 2, 1) #only for FNO
-x_grid = x
-t_grid = t
+#Setting up the Data for DeepOnet
+ui = u_sol[:,0]
+x = torch.tensor(x, dtype=torch.float32)
+t = torch.linspace(0, t_end, 50)[1:]
+
+X,T = torch.meshgrid(x,t)
+xt = torch.column_stack((X.ravel(), T.ravel()))
+uf = u_sol[:,1:,:].flatten(start_dim=1, end_dim=-1)
+
+# %%
+m = configuration['Discrete_m']
+idx = random_ints = np.random.randint(low=0, high=len(xt), size=m)
+
+trunk_in = xt[idx]
+don_out = uf[:,idx]
+branch_in = ui[:, ::int(len(x)/m)] #Selecting equally spaced "m" x-values
+
 # %% 
 ntrain = 80
 ntest = 20
-S = Nx  #Grid Size
 
+# %% 
 #Extracting configuration files
-T_in = configuration['T_in']
-T_out = configuration['T_out']
-step = configuration['Step']
+
 width = configuration['Width']
-output_size = configuration['Step']
+layers = configuration['Width']
 num_vars = configuration['Variables']
 batch_size = configuration['Batch Size']
 
-train_a = u[:ntrain, :, :T_in]
-train_u = u[:ntrain, :, T_in:T_out+T_in]
-
-test_a = u[-ntest:, :, :T_in]
-test_u = u[-ntest:, :, T_in:T_out+T_in]
-
-print(train_u.shape)
-print(test_u.shape)
-
+print("Training Input: " + str(trunk_in.shape) + ", " +  str(branch_in.shape))
+print("Training Output: " + str(don_out.shape))
 
 # %%
 #Normalising the train and test datasets with the preferred normalisation. 
@@ -151,28 +154,47 @@ elif norm_strategy == 'Gaussian':
 elif norm_strategy == 'Identity':
     normalizer = Identity
 
-a_normalizer = normalizer(train_a)
-u_normalizer = normalizer(train_u)
+a_normalizer = normalizer(branch_in)
+u_normalizer = normalizer(don_out)
 
-train_a = a_normalizer.encode(train_a)
-test_a = a_normalizer.encode(test_a)
+train_branch = a_normalizer.encode(branch_in)
+train_trunk = a_normalizer.encode(trunk_in)
+train_u = u_normalizer.encode(don_out)
 
-train_u = u_normalizer.encode(train_u)
-test_u_encoded = u_normalizer.encode(test_u)
+test_branch = u_normalizer.encode(branch_in)
+test_trunk = u_normalizer.encode(xt)
+test_u_encoded = u_normalizer.encode(uf)
 
-#Saving Normalisation 
-saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz'
+# #Saving Normalisation 
+# saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz'
 
-np.savez(saved_normalisations, 
-        in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
-        out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
-        )
+# np.savez(saved_normalisations, 
+#         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
+#         out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
+#         )
 
-run.save(saved_normalisations, 'output')
+# run.save(saved_normalisations, 'output')
 # %%
 #Setting up the training and testing data splits
-train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u_encoded), batch_size=batch_size, shuffle=False)
+from torch.utils.data import Dataset, DataLoader
+
+class Multi_Dataset(Dataset):
+    def __init__(self, features, labels, metadata):
+        self.features = features
+        self.labels = labels
+        self.metadata = metadata
+
+    def __len__(self):
+        return len(self.features)
+
+    def __getitem__(self, idx):
+        return self.features[idx], self.labels[idx], self.metadata[idx]
+
+train_data = Multi_Dataset(train_branch, train_trunk, train_u)
+test_data = Multi_Dataset(test_branch, test_trunk, test_u_encoded)
+
+train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True)
+test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False)
 
 t2 = default_timer()
 print('preprocessing finished, time used:', t2-t1)
@@ -181,11 +203,19 @@ print('preprocessing finished, time used:', t2-t1)
 ################################################################
 # training and evaluation
 ################################################################
-model = UNet1d(in_channels = T_in, out_channels = step, init_features=32)
+model = DeepONet(in_branch=m,
+        width_branch=width,
+        layers_branch=layers, 
+        out_branch=m,
+        in_trunk=2,
+        width_trunk=width,
+        layers_trunk=layers, 
+        out_trunk=m)
+
 model.to(device)
 
-run.update_metadata({'Number of Params': int(model.count_params())})
-print("Number of model params : " + str(model.count_params()))
+# run.update_metadata({'Number of Params': int(model.count_params())})
+# print("Number of model params : " + str(model.count_params()))
 
 #Setting up the optimizer and scheduler, loss and epochs 
 optimizer = torch.optim.Adam(model.parameters(), lr=configuration['Learning Rate'], weight_decay=1e-4)
@@ -202,7 +232,7 @@ for ep in range(epochs): #Training Loop - Epochwise
 
     model.train()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch(model, train_loader, test_loader, loss_func, optimizer)
+    train_loss, test_loss = train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer)
     t2 = default_timer()
 
     train_loss = train_loss / ntrain / num_vars
@@ -224,7 +254,7 @@ run.save(saved_model, 'output')
 
 # %%
 #Testing 
-pred_set_encoded, mse, mae = validation(model, test_a, test_u_encoded, step, T_out)
+pred_set_encoded, mse, mae = validation_AR(model, test_a, test_u_encoded, step, T_out)
 
 print('Testing Error (MSE) : %.3e' % (mse))
 print('Testing Error (MAE) : %.3e' % (mae))
@@ -244,8 +274,8 @@ pred_set = u_normalizer.decode(pred_set_encoded.to(device)).cpu()
 idx = np.random.randint(0,ntest) 
 x_range = x_grid
 
-u_field_actual = test_u[idx]
-u_field_pred = pred_set[idx]
+u_field_actual = test_u[idx, 0]
+u_field_pred = pred_set[idx, 0]
 
 v_min = torch.min(u_field_actual)
 v_max = torch.max(u_field_actual)
@@ -253,25 +283,22 @@ v_max = torch.max(u_field_actual)
 
 fig = plt.figure(figsize=plt.figaspect(0.5))
 ax = fig.add_subplot(1,3,1)
-pcm = ax.plot(x_range, u_field_actual[0,:], color='green')
-pcm = ax.plot(x_range, u_field_pred[0,:], color='firebrick')
+pcm = ax.plot(x_range, u_field_actual[:, 0], color='green')
+pcm = ax.plot(x_range, u_field_pred[:, 0], color='firebrick')
 ax.set_ylim([v_min, v_max])
 ax.title.set_text('t='+ str(T_in))
 
-u_field_actual = test_u[idx]
-u_field_pred = pred_set[idx]
-
 ax = fig.add_subplot(1,3,2)
-pcm = ax.plot(x_range, u_field_actual[int(T/2),:], color='green')
-pcm = ax.plot(x_range, u_field_pred[int(T/2),:], color='firebrick')
+pcm = ax.plot(x_range, u_field_actual[:,int(T_out/2)], color='green')
+pcm = ax.plot(x_range, u_field_pred[:, int(T_out/2)], color='firebrick')
 ax.set_ylim([v_min, v_max])
-ax.title.set_text('t='+ str(int((T+(T_in/2)))))
+ax.title.set_text('t='+ str(int((T_out+(T_in/2)))))
 ax.axes.yaxis.set_ticks([])
 
 ax = fig.add_subplot(1,3,3)
-pcm = ax.plot(x_range, u_field_actual[-1,:], color='green')
-pcm = ax.plot(x_range, u_field_pred[-1,:], color='firebrick')
-ax.title.set_text('t='+str(T+T_in))
+pcm = ax.plot(x_range, u_field_actual[:, -1], color='green')
+pcm = ax.plot(x_range, u_field_pred[:, -1], color='firebrick')
+ax.title.set_text('t='+str(T_out+T_in))
 ax.set_ylim([v_min, v_max])
 ax.axes.yaxis.set_ticks([])
 
@@ -281,3 +308,5 @@ run.save(plot_name, 'output')
 
 
 run.close()
+
+# %%

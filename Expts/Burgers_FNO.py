@@ -13,7 +13,7 @@ Equation:
 configuration = {"Case": 'Burgers',
                  "Field": 'u',
                  "Model": 'FNO',
-                 "Epochs": 500,
+                 "Epochs": 250,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.001,
@@ -21,9 +21,9 @@ configuration = {"Case": 'Burgers',
                  "Scheduler Gamma": 0.5,
                  "Activation": 'Tanh',
                  "Normalisation Strategy": 'Min-Max',
-                 "T_in": 20,    
+                 "T_in": 1,    
                  "T_out": 30,
-                 "Step": 30,
+                 "Step": 1,
                  "Width": 32, 
                  "Modes": 8,
                  "Variables":1, 
@@ -34,10 +34,10 @@ configuration = {"Case": 'Burgers',
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'Tests', 'AR'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'PIUQ', 'AR', 'Burgers'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
-run.save(os.path.abspath(__file__), 'code')
+run.save_file(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
@@ -75,7 +75,7 @@ np.random.seed(0)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 torch.set_default_dtype(torch.float32)
 
-# %% 
+
 # %%
 ################################################################
 # Loading Data 
@@ -92,8 +92,8 @@ u = u.permute(0, 2, 1) #only for FNO
 u = u.unsqueeze(1)
 x_grid = x
 # %% 
-ntrain = 800
-ntest = 200
+ntrain = 500
+ntest = 500
 
 #Extracting configuration files
 T_in = configuration['T_in']
@@ -146,7 +146,7 @@ np.savez(saved_normalisations,
         out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
         )
 
-run.save(saved_normalisations, 'output')
+run.save_file(saved_normalisations, 'output')
 # %%
 #Setting up the training and testing data splits
 train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)
@@ -180,7 +180,7 @@ for ep in range(epochs): #Training Loop - Epochwise
 
     model.train()
     t1 = default_timer()
-    train_loss, test_loss = train_one_epoch(model, train_loader, test_loader, loss_func, optimizer)
+    train_loss, test_loss = train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, step, T_out)
     t2 = default_timer()
 
     train_loss = train_loss / ntrain / num_vars
@@ -198,7 +198,7 @@ train_time = default_timer() - start_time
 #Saving the Model
 saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '.pth'
 torch.save( model.state_dict(), saved_model)
-run.save(saved_model, 'output')
+run.save_file(saved_model, 'output')
 
 # %%
 #Testing 
@@ -252,7 +252,7 @@ ax.axes.yaxis.set_ticks([])
 
 plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
 plt.savefig(plot_name)
-run.save(plot_name, 'output')
+run.save_file(plot_name, 'output')
 
 
 run.close()

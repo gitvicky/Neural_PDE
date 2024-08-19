@@ -24,9 +24,9 @@ configuration = {"Case": 'Wave',
                  "T_out": 60,
                  "Step": 10,
                  "Width_time": 32, 
-                 "Width_vARs": 0,  
+                 "Width_vars": 0,  
                  "Modes": 8,
-                 "VARiables":1, 
+                 "Variables":1, 
                  "Loss Function": 'LP',
                  "UQ": 'None', #None, Dropout
                  }
@@ -40,7 +40,7 @@ run.init(folder="/Neural_PDE", tags=['NPDE', 'U-Net', 'Tests', 'AR'], metadata=c
 #Saving the current run file and the git hash of the repo
 run.save(os.path.abspath(__file__), 'code')
 import git
-repo = git.Repo(seARch_parent_directories=True)
+repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
 run.update_metadata({'Git Hash': sha})
 
@@ -61,7 +61,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
 # %%
 #Importing the models and utilities. 
-from Neural_PDE.Models.U_Net import *
+from Neural_PDE.Models.UNet import *
 from Neural_PDE.Utils.processing_utils import * 
 from Neural_PDE.Utils.training_utils import * 
 

@@ -11,7 +11,7 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'FNO',
-                 "Epochs": 500,
+                 "Epochs": 250,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -20,9 +20,9 @@ configuration = {"Case": 'Wave',
                  "Activation": 'GeLU',
                  "Physics Normalisation": 'No',
                  "Normalisation Strategy": 'Min-Max',
-                 "T_in": 20,    
+                 "T_in": 1,    
                  "T_out": 60,
-                 "Step": 10,
+                 "Step": 1,
                  "Width_time": 32, 
                  "Width_vars": 0,  
                  "Modes": 8,
@@ -35,10 +35,10 @@ configuration = {"Case": 'Wave',
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'Tests', 'AR'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'PIUQ', 'AR', 'Wave'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
-run.save(os.path.abspath(__file__), 'code')
+run.save_file(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
@@ -93,8 +93,8 @@ u = torch.from_numpy(u_sol)
 u = u.permute(0, 2, 3, 1)
 u = torch.unsqueeze(u, 1)
 # %% 
-ntrain = 800
-ntest = 200
+ntrain = 500
+ntest = 500
 S = 64 #Grid Size
 
 #Extracting configuration files
@@ -148,7 +148,7 @@ np.savez(saved_normalisations,
         out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
         )
 
-run.save(saved_normalisations, 'output')
+run.save_file(saved_normalisations, 'output')
 # %%
 #Setting up the data loaders. 
 train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size, shuffle=True)
@@ -203,7 +203,7 @@ train_time = default_timer() - start_time
 saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '.pth'
 
 torch.save( model.state_dict(), saved_model)
-run.save(saved_model, 'output')
+run.save_file(saved_model, 'output')
 # %%
 #Validation
 pred_set_encoded, mse, mae = validation_AR(model, test_a, test_u_encoded, step, T_out)
@@ -288,7 +288,7 @@ fig.colorbar(pcm, pad=0.05)
 
 plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
 plt.savefig(plot_name)
-run.save(plot_name, 'output')
+run.save_file(plot_name, 'output')
 
 run.close()
 # %%
