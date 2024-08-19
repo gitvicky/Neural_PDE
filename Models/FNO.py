@@ -369,7 +369,6 @@ class FNO_multi1d(nn.Module):
         c = 0
         for p in self.parameters():
             c += reduce(operator.mul, list(p.size()))
-
         return c
     
 # %%

@@ -226,6 +226,47 @@ def train_one_epoch(model, train_loader, test_loader, loss_func, optimizer):
 
     return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
 
+
+# %%
+################################################################
+# Training - Supervised with no roll-outs. -- DeepOnets with a Trunk and Branch Input 
+################################################################
+
+def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
+    model.train()
+    train_loss = 0
+    for br, tr, yy in train_loader:
+        optimizer.zero_grad()
+        br = br.to(device)
+        tr = tr.to(device)
+        xx = [br, tr]
+        yy = yy.to(device)
+        batch_size = yy.shape[0]
+
+        im = model(xx)
+        loss = loss_func(im.reshape(batch_size, -1), yy.reshape(batch_size, -1))
+ 
+        loss.backward()
+        # torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
+        optimizer.step()
+
+        train_loss += loss.item()
+    
+    # Validation Loop
+    test_loss = 0
+    with torch.no_grad():
+        for xx, yy in test_loader:
+            br = br.to(device)
+            tr = tr.to(device)
+            xx = [br, tr]
+            yy = yy.to(device)
+            batch_size = xx.shape[0]
+            out = model(xx)
+            test_loss += loss_func(out.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+
+    return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
+
+
 # %% 
 ################################################################
 # Validation / Inference for INR / PINNs 
