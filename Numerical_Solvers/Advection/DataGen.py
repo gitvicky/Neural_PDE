@@ -29,8 +29,8 @@ sim = Advection_1d(Nx, Nt, x_min, x_max, t_end)
 
 n_sims = 1000
 
-lb = np.asarray([0.1, 0.1]) #pos, velocity
-ub = np.asarray([1.0, 1.0])
+lb = np.asarray([0.1, 50]) #pos, amplitude
+ub = np.asarray([1.0, 200])
 
 params = lb + (ub - lb) * lhs(2, n_sims)
 
@@ -38,8 +38,8 @@ params = lb + (ub - lb) * lhs(2, n_sims)
 u_sol = []
 for ii in tqdm(range(n_sims)):
     xc = params[ii, 0]
-    v = params[ii, 1]
-    x, t, u_soln, u_exact = sim.solve(v, xc)
+    amp = params[ii, 1]
+    x, t, u_soln, u_exact = sim.solve(xc, amp, v=1)
 
     u_sol.append(u_soln)
 

@@ -65,7 +65,7 @@ class Advection_1d:
         """
         Initialize the solution array U and the next time step array unp1.
         """
-        u0 = np.exp(-200*(self.x-self.xc)**2)
+        u0 = np.exp(-self.amp*(self.x-self.xc)**2)
         self.u = u0.copy()
         self.unp1 = u0.copy()
         
@@ -84,11 +84,12 @@ class Advection_1d:
         # Assert that the CFL condition is not violated
         assert courant_number <= 1, "CFL condition violated"
         
-    def solve(self, v, xc):
+    def solve(self, xc, amp, v=1):
 
         self.v = v # velocity
         self.xc = xc #position of the gaussian
-        
+        self.amp = amp #amplitude of the gaussian
+
         self.initializeU()
         self.initializeParams()
         
@@ -138,8 +139,12 @@ class Advection_1d:
 #     t_end = 0.5 #time length
 #     v = 1 #Advection velocity 
 #     xc = 0.25 #Centre of Gaussian 
-    
+#     amp = 200 #Amplitude
+
 #     sim = Advection_1d(Nx, Nt, x_min, x_max, t_end) 
-#     x, t, u_sol, u_exact = sim.solve(v, xc)
+#     x, t, u_sol, u_exact = sim.solve(xc, amp, v)
 #     v = 1 
+#     plt.plot(x, u_sol.T)
+#     plt.xlabel('x')
+#     plt.ylabel('u: in-time')
 # %%
