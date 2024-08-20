@@ -73,6 +73,7 @@ def train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, s
     with torch.no_grad():
         for xx, yy in test_loader:
             xx, yy = xx.to(device), yy.to(device)
+            batch_size = xx.shape[0]
 
             for t in range(0, T_out, step):
                 y = yy[..., t:t + step]
