@@ -38,7 +38,7 @@ def train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, s
             im = model(xx)
 
             #Recon Loss
-            # loss += loss_func(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
+            loss += loss_func(im.reshape(batch_size, -1), y.reshape(batch_size, -1))
 
             #Diff Loss https://iopscience.iop.org/article/10.1088/1741-4326/ad313a/pdf
             # pred_diff = im - xx[..., -step:]
@@ -55,7 +55,7 @@ def train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, s
 
             
         #PI Loss
-        loss = loss_func(im)
+        # loss = loss_func(im)
 
         train_l2_step += loss.item()
         l2_full = loss_func(pred.reshape(batch_size, -1), yy.reshape(batch_size, -1))
