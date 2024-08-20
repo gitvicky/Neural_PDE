@@ -61,11 +61,11 @@ class Advection_1d:
         self.x = np.arange(self.x_min-self.dx, self.x_max+(2*self.dx), self.dx)
         
         
-    def initializeU(self):
+    def initializeU(self, xc, amp):
         """
         Initialize the solution array U and the next time step array unp1.
         """
-        u0 = np.exp(-self.amp*(self.x-self.xc)**2)
+        u0 = np.exp(-amp*(self.x-xc)**2)
         self.u = u0.copy()
         self.unp1 = u0.copy()
         
@@ -90,7 +90,7 @@ class Advection_1d:
         self.xc = xc #position of the gaussian
         self.amp = amp #amplitude of the gaussian
 
-        self.initializeU()
+        self.initializeU(self.xc, self.amp)
         self.initializeParams()
         
         self.u_sol = []
