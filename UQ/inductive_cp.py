@@ -94,3 +94,36 @@ def get_weighted_quantile(scores, quantile, weights):
     qidx_y = np.sum(cdf_pweights < quantile, axis=0)  # equivalent to [np.searchsorted(cdf_n1, q) for cdf_n1 in cdf_n1xy]
     q_y = sortedscores[(qidx_y, range(qidx_y.size))]
     return q_y
+
+
+
+def filter_sims_within_bounds(lower_bound, upper_bound, samples, threshold, within=False):
+    """
+    Filter samples that have values within the given bounds at least threshold percent of the time.
+    
+    Parameters:
+    lower_bound (np.array): Lower bound array of shape [Nt, Nx]
+    upper_bound (np.array): Upper bound array of shape [Nt, Nx]
+    samples (np.array): Sample array of shape [BS, Nt, Nx]
+    threshold (float): Minimum percentage of values that must be within bounds
+    within (boolean): values within or outside the bounds
+
+    Returns:
+    np.array: Boolean array indicating which samples meet the criterion
+    """
+    # Ensure inputs are numpy arrays
+    lower_bound = np.array(lower_bound)
+    upper_bound = np.array(upper_bound)
+    samples = np.array(samples)
+    
+    # Check if samples are within bounds
+    if within:
+        with_bounds = (samples >= lower_bound) & (samples <= upper_bound)
+    else: 
+        with_bounds = (samples <= lower_bound) | (samples >= upper_bound)
+
+    # Calculate the percentage of values in/out bounds for each sample
+    percent_with_bounds = with_bounds.mean(axis=(1,2))
+    
+    # Return boolean array indicating which samples meet the threshold
+    return percent_with_bounds >= threshold
