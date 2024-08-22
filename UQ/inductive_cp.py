@@ -123,7 +123,8 @@ def filter_sims_within_bounds(lower_bound, upper_bound, samples, threshold, with
         with_bounds = (samples <= lower_bound) | (samples >= upper_bound)
 
     # Calculate the percentage of values in/out bounds for each sample
-    percent_with_bounds = with_bounds.mean(axis=(1,2))
+    percent_with_bounds = with_bounds.mean(axis=tuple(range(1, with_bounds.ndim)))
+
     
     # Return boolean array indicating which samples meet the threshold
     return percent_with_bounds >= threshold
