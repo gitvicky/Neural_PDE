@@ -27,6 +27,8 @@ class Wave_2D:
         self.dx = (x_max - x_min)/self.N
         self.dy = self.dx
         self.tend = t_end
+        self.dt = 6/self.N**2
+        self.t = np.arange(0,self.tend,self.dt)
 
         self.c = c # Wave Speed <=1.0
         assert self.c <= 1, "Unrealistic Wave Speed"
@@ -40,14 +42,12 @@ class Wave_2D:
         self.y = self.x.copy()
         self.xx, self.yy = np.meshgrid(self.x, self.y)#Creating the 2D meshgrids
         
-        self.dt = 6/self.N**2
         
         #Initial Conditions 
         self.vv = np.exp(-Lambda*((self.xx-aa)**2 + (self.yy-bb)**2))
         self.vvold = self.vv.copy()
         
         self.nstep = int(self.tend / self.dt) + 1
-        self.t = np.arange(0,self.tend,self.dt)
 
     def solve(self, Lambda, aa, bb):
 

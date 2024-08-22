@@ -84,20 +84,20 @@ class Burgers_1D:
         return u, self.x, self.dt
 
 # %% 
-#Example Usage 
-# if __name__ == "__main__":
-#     #Example Usage
-#     Nx = 1000 #Number of x-points
-#     Nt = 500 #Number of time instances 
-#     x_min = 0.0 #Min of X-range 
-#     x_max = 2.0 #Max of X-range 
-#     t_end = 1.25 #Time Maximum
-#     nu = 0.002
+# Example Usage 
+if __name__ == "__main__":
+    #Example Usage
+    Nx = 1000 #Number of x-points
+    Nt = 500 #Number of time instances 
+    x_min = 0.0 #Min of X-range 
+    x_max = 2.0 #Max of X-range 
+    t_end = 1.25 #Time Maximum
+    nu = 0.002
 
-#     alpha, beta, gamma = 1.0, 1.0, 1.0
+    alpha, beta, gamma = 1.0, 1.0, 1.0
 
-#     sim = Burgers_1D(Nx, Nt, x_min, x_max, t_end, nu) 
-#     sim.InitializeU(alpha, beta, gamma)
-#     u_sol = sim.solve()
+    sim = Burgers_1D(Nx, Nt, x_min, x_max, t_end, nu) 
+    sim.InitializeU(alpha, beta, gamma)
+    u_sol = sim.solve()
 
 # %%
