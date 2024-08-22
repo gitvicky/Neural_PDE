@@ -33,7 +33,7 @@ class Wave_2D:
         self.c = c # Wave Speed <=1.0
         assert self.c <= 1, "Unrealistic Wave Speed"
 
-    def intialise(self, Lambda, aa, bb):
+    def initialise(self, Lambda, aa, bb):
         """
         Initialize the grid, time step, and initial conditions.
         """
