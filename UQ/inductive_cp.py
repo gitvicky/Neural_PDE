@@ -96,6 +96,16 @@ def get_weighted_quantile(scores, quantile, weights):
     return q_y
 
 
+#Joint CP 
+def modulation_func(cal_targs, cal_preds):
+    return np.std(cal_preds - cal_targs, axis = 0)
+
+def emp_cov_joint(prediction_sets, y_response):
+    axes = tuple(np.arange(1,len(y_response.shape)))
+    return ((y_response >= prediction_sets[0]).all(axis = axes) & (y_response <= prediction_sets[1]).all(axis = axes)).mean()
+
+
+
 
 def filter_sims_within_bounds(lower_bound, upper_bound, samples, threshold, within=False):
     """
@@ -128,3 +138,5 @@ def filter_sims_within_bounds(lower_bound, upper_bound, samples, threshold, with
     
     # Return boolean array indicating which samples meet the threshold
     return percent_with_bounds >= threshold
+
+
