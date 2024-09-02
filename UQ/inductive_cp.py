@@ -105,7 +105,7 @@ def emp_cov_joint(prediction_sets, y_response):
     return ((y_response >= prediction_sets[0]).all(axis = axes) & (y_response <= prediction_sets[1]).all(axis = axes)).mean()
 
 def ncf_metric_joint(y_targs, y_pred, modulation):
-    return np.max(np.abs((y_targs - y_pred)/modulation),  axis =  tuple(np.arange(1,len(y_targs.shape))))
+    return np.max(np.abs(y_targs - y_pred)/modulation,  axis =  tuple(np.arange(1,len(y_targs.shape))))
 
 def filter_sims_within_bounds(lower_bound, upper_bound, samples, threshold, within=False):
     """
