@@ -106,7 +106,6 @@ class Navier_Stokes_2d:
 
 		self.Nt = int(np.ceil(self.tEnd/dt))
 
-
 	def solve(self):
 		u_list = []
 		v_list = []

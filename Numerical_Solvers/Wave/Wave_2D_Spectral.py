@@ -51,7 +51,7 @@ class Wave_2D:
 
     def solve(self, Lambda, aa, bb):
 
-        self.intialise(Lambda, aa, bb)
+        self.initialise(Lambda, aa, bb)
 
         """
         Solve the 2D wave equation using the spectral method.
