@@ -98,7 +98,7 @@ def get_weighted_quantile(scores, quantile, weights):
 
 #Joint CP 
 def modulation_func(cal_targs, cal_preds):
-    return np.std(cal_preds - cal_targs, axis = 0)
+    return np.std(cal_preds - cal_targs + 1e-6, axis = 0)
 
 def emp_cov_joint(prediction_sets, y_response):
     axes = tuple(np.arange(1,len(y_response.shape)))
