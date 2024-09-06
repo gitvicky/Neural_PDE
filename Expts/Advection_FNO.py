@@ -82,32 +82,31 @@ from Neural_PDE.Numerical_Solvers.Advection.Advection_1D import *
 from pyDOE import lhs
 
 #Obtaining the exact and FD solution of the 1D Advection Equation. 
-
 Nx = 200 #Number of x-points
 Nt = 50 #Number of time instances 
 x_min, x_max = 0.0, 2.0 #X min and max
 t_end = 0.5 #time length
-
+v = 1.0
 sim = Advection_1d(Nx, Nt, x_min, x_max, t_end) 
+dt, dx = sim.dt, sim.dx
 
 n_sims = 100
 
-lb = np.asarray([0.1, 0.1]) #pos, velocity
-ub = np.asarray([1.0, 1.0])
+lb = np.asarray([0.5, 50]) #pos, amplitude
+ub = np.asarray([1.0, 200])
 
 params = lb + (ub - lb) * lhs(2, n_sims)
 
 u_sol = []
 for ii in tqdm(range(n_sims)):
     xc = params[ii, 0]
-    v = params[ii, 1]
-    x, t, u_soln, u_exact = sim.solve(v, xc)
+    amp = params[ii, 1]
+    x, t, u_soln, u_exact = sim.solve(xc, amp, v)
     u_sol.append(u_soln)
 
 u_sol = np.asarray(u_sol)
 u_sol = u_sol[:, :, 1:-2]
-x = x[1:-2]
-velocity = params[:,1]
+x = x[1:-2]1]
 
 # %% 
 u = torch.tensor(u_sol, dtype=torch.float32)

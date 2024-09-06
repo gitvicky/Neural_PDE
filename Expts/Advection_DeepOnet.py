@@ -14,14 +14,14 @@ configuration = {"Case": 'Advection',
                  "Field": 'u',
                  "Model": 'DeepOnet',
                  "Epochs": 10000,
-                 "Batch Size": 20,
+                 "Batch Size": 200,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.001,
-                 "Scheduler Step": 100,
+                 "Scheduler Step": 1000,
                  "Scheduler Gamma": 0.5,
                  "Activation": 'Tanh',
                  "Normalisation Strategy": 'Identity',
-                 "Discrete_m": 100,
+                 "Branch_Input": 128,
                  "Layers": 4,
                  "Width": 256, 
                  "Variables":1, 
@@ -31,11 +31,11 @@ configuration = {"Case": 'Advection',
 
 import os
 from simvue import Run
-run = Run(mode='disabled')
+run = Run(mode='online')
 run.init(folder="/Neural_PDE", tags=['NPDE', 'DeepONet', 'Tests'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
-run.save(os.path.abspath(__file__), 'code')
+run.save_file(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
@@ -46,6 +46,7 @@ import sys
 import numpy as np
 from tqdm import tqdm 
 import torch
+from torch.utils.data import Dataset, DataLoader
 import matplotlib
 import matplotlib.pyplot as plt
 import time 
@@ -81,64 +82,62 @@ from pyDOE import lhs
 
 #Obtaining the exact and FD solution of the 1D Advection Equation. 
 
+#Obtaining the exact and FD solution of the 1D Advection Equation. 
 Nx = 200 #Number of x-points
 Nt = 50 #Number of time instances 
 x_min, x_max = 0.0, 2.0 #X min and max
 t_end = 0.5 #time length
-
+v = 1.0
 sim = Advection_1d(Nx, Nt, x_min, x_max, t_end) 
+dt, dx = sim.dt, sim.dx
 
-n_sims = 100
+n_sims = 1000
 
-lb = np.asarray([0.1, 0.1]) #pos, velocity
-ub = np.asarray([1.0, 1.0])
+lb = np.asarray([0.5, 50]) #pos, amplitude
+ub = np.asarray([1.0, 200])
 
 params = lb + (ub - lb) * lhs(2, n_sims)
 
 u_sol = []
 for ii in tqdm(range(n_sims)):
     xc = params[ii, 0]
-    v = params[ii, 1]
-    x, t, u_soln, u_exact = sim.solve(v, xc)
+    amp = params[ii, 1]
+    x, t, u_soln, u_exact = sim.solve(xc, amp, v)
     u_sol.append(u_soln)
 
 u_sol = np.asarray(u_sol)
 u_sol = u_sol[:, :, 1:-2]
 x = x[1:-2]
-velocity = params[:,1]
-u_sol = torch.tensor(u_sol, dtype=torch.float32)
+
 # %% 
 #Setting up the Data for DeepOnet
-ui = u_sol[:,0]
+#Class that takes in the simulation solutions, X Mesh and the initial (sensor) locations and gives you a dataset
+class DON_Dataset(Dataset):
+    def __init__(self, u, X, T, initial_locations):
+        self.u = u
+        self.X = X
+        self.T = T
+        self.initial_locations = initial_locations
+
+    def __len__(self):
+        return self.u.shape[0]
+
+    def __getitem__(self, idx):
+        u_sample = self.u[idx]
+        u_ic = u_sample[0].flatten()
+        u_init= u_ic[self.initial_locations]
+        
+        x = torch.column_stack((self.X.flatten(), self.T.flatten()))
+        u_flat = u_sample.flatten()
+        
+        return torch.FloatTensor(u_init), torch.FloatTensor(x), torch.FloatTensor(u_flat).unsqueeze(1)
+    
+# %% 
 x = torch.tensor(x, dtype=torch.float32)
-t = torch.linspace(0, t_end, 50)[1:]
-
+t = torch.linspace(0, t_end, 50)
 X,T = torch.meshgrid(x,t)
-xt = torch.column_stack((X.ravel(), T.ravel()))
-uf = u_sol[:,1:,:].flatten(start_dim=1, end_dim=-1)
-
-# %%
-m = configuration['Discrete_m']
-idx = random_ints = np.random.randint(low=0, high=len(xt), size=m)
-
-trunk_in = xt[idx]
-don_out = uf[:,idx]
-branch_in = ui[:, ::int(len(x)/m)] #Selecting equally spaced "m" x-values
-
-# %% 
-ntrain = 80
-ntest = 20
-
-# %% 
-#Extracting configuration files
-
-width = configuration['Width']
-layers = configuration['Width']
-num_vars = configuration['Variables']
-batch_size = configuration['Batch Size']
-
-print("Training Input: " + str(trunk_in.shape) + ", " +  str(branch_in.shape))
-print("Training Output: " + str(don_out.shape))
+initial_locations = np.random.choice(len(x), configuration['Branch_Input'], replace=False)
+u_sol = torch.tensor(u_sol, dtype=torch.float32)
 
 # %%
 #Normalising the train and test datasets with the preferred normalisation. 
@@ -154,47 +153,28 @@ elif norm_strategy == 'Gaussian':
 elif norm_strategy == 'Identity':
     normalizer = Identity
 
-a_normalizer = normalizer(branch_in)
-u_normalizer = normalizer(don_out)
-
-train_branch = a_normalizer.encode(branch_in)
-train_trunk = a_normalizer.encode(trunk_in)
-train_u = u_normalizer.encode(don_out)
-
-test_branch = u_normalizer.encode(branch_in)
-test_trunk = u_normalizer.encode(xt)
-test_u_encoded = u_normalizer.encode(uf)
+normalizer = normalizer(u_sol)
 
 # #Saving Normalisation 
 # saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz'
 
 # np.savez(saved_normalisations, 
-#         in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
-#         out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
-#         )
+#         a= normalizer.a.numpy(), b = normalizer.b.numpy()
+# )
 
-# run.save(saved_normalisations, 'output')
-# %%
-#Setting up the training and testing data splits
-from torch.utils.data import Dataset, DataLoader
+# run.save_file(saved_normalisations, 'output')
 
-class Multi_Dataset(Dataset):
-    def __init__(self, features, labels, metadata):
-        self.features = features
-        self.labels = labels
-        self.metadata = metadata
 
-    def __len__(self):
-        return len(self.features)
+# %% 
+#Setting up the Datasets nad Loaders. 
+dataset = DON_Dataset(normalizer.encode(u_sol), X, T, initial_locations)
 
-    def __getitem__(self, idx):
-        return self.features[idx], self.labels[idx], self.metadata[idx]
+train_size = int(0.8 * len(dataset))
+val_size = len(dataset) - train_size
+train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
-train_data = Multi_Dataset(train_branch, train_trunk, train_u)
-test_data = Multi_Dataset(test_branch, test_trunk, test_u_encoded)
-
-train_loader = torch.utils.data.DataLoader(train_data, batch_size=batch_size, shuffle=True)
-test_loader = torch.utils.data.DataLoader(test_data, batch_size=batch_size, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=configuration['Batch Size'], shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=configuration['Batch Size'])
 
 t2 = default_timer()
 print('preprocessing finished, time used:', t2-t1)
@@ -203,14 +183,14 @@ print('preprocessing finished, time used:', t2-t1)
 ################################################################
 # training and evaluation
 ################################################################
-model = DeepONet(in_branch=m,
-        width_branch=width,
-        layers_branch=layers, 
-        out_branch=m,
+model = DeepONet(in_branch=configuration['Branch_Input'],
+        width_branch=configuration['Width'],
+        layers_branch=configuration['Layers'], 
+        out_branch=configuration['Width'],
         in_trunk=2,
-        width_trunk=width,
-        layers_trunk=layers, 
-        out_trunk=m)
+        width_trunk=configuration['Width'],
+        layers_trunk=configuration['Layers'], 
+        out_trunk=configuration['Width'])
 
 model.to(device)
 
@@ -235,8 +215,8 @@ for ep in range(epochs): #Training Loop - Epochwise
     train_loss, test_loss = train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer)
     t2 = default_timer()
 
-    train_loss = train_loss / ntrain / num_vars
-    test_loss = test_loss / ntest / num_vars
+    train_loss = train_loss # / ntrain / num_vars
+    test_loss = test_loss #/ ntest / num_vars
 
     print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 3)}, Test Loss: {round(test_loss,3)}")
     run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
@@ -250,11 +230,12 @@ train_time = default_timer() - start_time
 #Saving the Model
 saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '.pth'
 torch.save( model.state_dict(), saved_model)
-run.save(saved_model, 'output')
+run.save_file(saved_model, 'output')
 
 # %%
 #Testing 
-pred_set_encoded, mse, mae = validation_AR(model, test_a, test_u_encoded, step, T_out)
+test_trunk, test_branch, test_u_encoded = next(iter(test_loader))
+pred_set_encoded, mse, mae = validation_don(model, test_trunk, test_branch, test_u_encoded)
 
 print('Testing Error (MSE) : %.3e' % (mse))
 print('Testing Error (MAE) : %.3e' % (mae))
@@ -265,46 +246,51 @@ run.update_metadata({'Training Time': float(train_time),
                     })
 
 # %% 
-#Denormalising the predictions
-pred_set = u_normalizer.decode(pred_set_encoded.to(device)).cpu()
+#Denormalising and reshaping the target and the predictions
+pred_set = normalizer.decode(pred_set_encoded.to(device)).cpu()
+pred_set = pred_set.numpy().reshape(len(pred_set), len(t), len(x))
+
+test_u = normalizer.decode(test_u_encoded.to(device)).cpu()
+test_u = test_u.numpy().reshape(len(test_u), len(t), len(x))
 
 # %%
 #Plotting the surrogate performance against that of the test data. 
 
-idx = np.random.randint(0,ntest) 
-x_range = x_grid
+idx = np.random.randint(0, len(pred_set)) 
+idx = 5
+x_range = x
 
-u_field_actual = test_u[idx, 0]
-u_field_pred = pred_set[idx, 0]
+u_field_actual = test_u[idx]
+u_field_pred = pred_set[idx]
 
-v_min = torch.min(u_field_actual)
-v_max = torch.max(u_field_actual)
-
+# v_min = np.min(u_field_actual)
+# v_max = np.min(u_field_actual)
 
 fig = plt.figure(figsize=plt.figaspect(0.5))
 ax = fig.add_subplot(1,3,1)
-pcm = ax.plot(x_range, u_field_actual[:, 0], color='green')
-pcm = ax.plot(x_range, u_field_pred[:, 0], color='firebrick')
-ax.set_ylim([v_min, v_max])
-ax.title.set_text('t='+ str(T_in))
+pcm = ax.plot(x_range, u_field_actual[0], color='green', label='Actual')
+pcm = ax.plot(x_range, u_field_pred[0], color='firebrick', label='Prediction')
+# ax.set_ylim([v_min, v_max])
+ax.title.set_text('t='+ str(0))
 
 ax = fig.add_subplot(1,3,2)
-pcm = ax.plot(x_range, u_field_actual[:,int(T_out/2)], color='green')
-pcm = ax.plot(x_range, u_field_pred[:, int(T_out/2)], color='firebrick')
-ax.set_ylim([v_min, v_max])
-ax.title.set_text('t='+ str(int((T_out+(T_in/2)))))
+pcm = ax.plot(x_range, u_field_actual[10], color='green', label='Actual')
+pcm = ax.plot(x_range, u_field_pred[10], color='firebrick', label='Prediction')
+# ax.set_ylim([v_min, v_max])
+ax.title.set_text('t='+ str(int((10))))
 ax.axes.yaxis.set_ticks([])
 
 ax = fig.add_subplot(1,3,3)
-pcm = ax.plot(x_range, u_field_actual[:, -1], color='green')
-pcm = ax.plot(x_range, u_field_pred[:, -1], color='firebrick')
-ax.title.set_text('t='+str(T_out+T_in))
-ax.set_ylim([v_min, v_max])
+pcm = ax.plot(x_range, u_field_actual[-1], color='green', label='Actual')
+pcm = ax.plot(x_range, u_field_pred[-1], color='firebrick', label='Prediction')
+ax.title.set_text('t='+str(20))
+# ax.set_ylim([v_min, v_max])
 ax.axes.yaxis.set_ticks([])
+ax.legend()
 
 plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
 plt.savefig(plot_name)
-run.save(plot_name, 'output')
+run.save_file(plot_name, 'output')
 
 
 run.close()

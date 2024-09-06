@@ -7,7 +7,7 @@ FNO modelled over the 2D Navier-Stokes equations auto-regressively
 
 # %%
 configuration = {"Case": 'Navier-Stokes',
-                 "Field": 'u, v, p, w',
+                 "Field": 'u, v, p',
                  "Model": 'FNO',
                  "Epochs": 250,
                  "Batch Size": 50,
@@ -24,7 +24,7 @@ configuration = {"Case": 'Navier-Stokes',
                  "Width_time": 16, 
                  "Width_vars": 0,  
                  "Modes": 8,
-                 "Variables":4, 
+                 "Variables":3, 
                  "Loss Function": 'LP',
                  "UQ": 'None', #None, Dropout
                  }
@@ -101,9 +101,9 @@ def stacked_fields(variables):
     stack = torch.stack(stack, dim=1)
     return stack
 
-vars = stacked_fields([u,v,p,w])
+vars = stacked_fields([u,v,p])
 
-field = ['u', 'v', 'p', 'w']
+field = ['u', 'v', 'p']
 
 # %% 
 ntrain = 200
