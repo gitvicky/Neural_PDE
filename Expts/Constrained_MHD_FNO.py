@@ -85,7 +85,7 @@ t1 = default_timer()
 data =  np.load(data_loc + '/Constrained_MHD_combined.npz')
 
 rho = data['rho'].astype(np.float32)[:, ::2]
-u = data['v'].astype(np.float32)[:, ::2]
+u = data['u'].astype(np.float32)[:, ::2]
 v = data['v'].astype(np.float32)[:, ::2]
 p = data['p'].astype(np.float32)[:, ::2]
 Bx = data['Bx'].astype(np.float32)[:, ::2]
