@@ -14,14 +14,13 @@ configuration = {"Case": 'Advection',
                  "Field": 'u',
                  "Model": 'DeepOnet',
                  "Epochs": 10000,
-                 "Batch Size": 200,
+                 "Batch Size": 100,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.001,
                  "Scheduler Step": 1000,
                  "Scheduler Gamma": 0.5,
                  "Activation": 'Tanh',
                  "Normalisation Strategy": 'Identity',
-                 "Branch_Input": 128,
                  "Layers": 4,
                  "Width": 256, 
                  "Variables":1, 
@@ -34,7 +33,7 @@ from simvue import Run
 run = Run(mode='online')
 run.init(folder="/Neural_PDE", tags=['NPDE', 'DeepONet', 'Tests'], metadata=configuration)
 
-#Saving the current run file and the git hash of the repo
+# Saving the current run file and the git hash of the repo
 run.save_file(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
@@ -113,12 +112,13 @@ x = x[1:-2]
 #Setting up the Data for DeepOnet
 #Class that takes in the simulation solutions, X Mesh and the initial (sensor) locations and gives you a dataset
 class DON_Dataset(Dataset):
-    def __init__(self, u, X, T, initial_locations):
+    def __init__(self, u, x, t,  initial_locations):
         self.u = u
-        self.X = X
-        self.T = T
+        self.x = x
+        self.t = t
+        self.X, self.T = torch.meshgrid(x,t, indexing='ij')
+        self.x_loc = torch.column_stack((self.X.flatten(), self.T.flatten()))
         self.initial_locations = initial_locations
-        self.x = torch.column_stack((self.X.flatten(), self.T.flatten()))
 
     def __len__(self):
         return self.u.shape[0]
@@ -128,15 +128,14 @@ class DON_Dataset(Dataset):
         u_ic = u_sample[0].flatten()
         u_init= u_ic[self.initial_locations]
         
-        u_flat = u_sample.flatten()
-        
-        return torch.FloatTensor(u_init), torch.FloatTensor(self.x), torch.FloatTensor(u_flat).unsqueeze(1)
+        return torch.FloatTensor(u_init), torch.FloatTensor(u_sample)
     
 # %% 
 x = torch.tensor(x, dtype=torch.float32)
 t = torch.linspace(0, t_end, 50)
 X,T = torch.meshgrid(x,t)
-initial_locations = np.random.choice(len(x), configuration['Branch_Input'], replace=False)
+X_loc = torch.column_stack((X.flatten(), T.flatten()))
+initial_locations = np.arange(0, len(x))
 u_sol = torch.tensor(u_sol, dtype=torch.float32)
 
 # %%
@@ -167,7 +166,7 @@ normalizer = normalizer(u_sol)
 
 # %% 
 #Setting up the Datasets nad Loaders. 
-dataset = DON_Dataset(normalizer.encode(u_sol), X, T, initial_locations)
+dataset = DON_Dataset(normalizer.encode(u_sol), x, t, initial_locations)
 
 train_size = int(0.8 * len(dataset))
 val_size = len(dataset) - train_size
@@ -183,7 +182,7 @@ print('preprocessing finished, time used:', t2-t1)
 ################################################################
 # training and evaluation
 ################################################################
-model = DeepONet(in_branch=configuration['Branch_Input'],
+model = DeepONet(in_branch=len(x),
         width_branch=configuration['Width'],
         layers_branch=configuration['Layers'], 
         out_branch=configuration['Width'],
@@ -207,18 +206,20 @@ epochs = configuration['Epochs']
 ####################################
 #Training Loop 
 ####################################
+
 def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
     model.train()
     train_loss = 0
-    for br, tr, yy in train_loader:
+    for u0, yy in train_loader:
         optimizer.zero_grad()
-        br = br.to(device)
-        tr = tr.to(device)
-        yy = yy.to(device)
-        batch_size = yy.shape[0]
-
-        im = model(br, tr)
-        loss = loss_func(im.reshape(batch_size, -1), yy.reshape(batch_size, -1))
+        br = u0.unsqueeze(1).to(device)
+        for tt in range(len(t)):
+            tr = torch.FloatTensor(torch.column_stack((x.flatten(), torch.ones(x.shape)*tt))).to(device)
+            tr = tr.unsqueeze(0).repeat(br.shape[0], 1, 1)
+            y = yy[:,tt].to(device)
+            im = model(br, tr)
+            # print(br.shape, tr.shape, y.shape, im.shape)
+            loss = loss_func(im, y)
  
         loss.backward()
         # torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
@@ -229,30 +230,34 @@ def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
     # Validation Loop
     test_loss = 0
     with torch.no_grad():
-        for br, tr, yy in test_loader:
-            br = br.to(device)
-            tr = tr.to(device)
-            yy = yy.to(device)
-            batch_size = br.shape[0]
-            out = model(br, tr)
-            test_loss += loss_func(out.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
-
+        for u0, yy in test_loader:
+            br = u0.unsqueeze(1).to(device)
+            for tt in range(len(t)):
+                tr = torch.FloatTensor(torch.column_stack((x.flatten(), torch.ones(x.shape)*tt))).to(device)
+                tr = tr.unsqueeze(0).repeat(br.shape[0], 1, 1)
+                y = yy[:,tt].to(device)
+                im = model(br, tr)
+                test_loss += loss_func(im, y)
+                
     return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
 
-def validation_don(model, br, tr, yy):
-    with torch.no_grad():
-        
-        br = br.to(device)
-        tr = tr.to(device)
-        yy = yy.to(device)
-        pred = model(br, tr)
 
+def validation_don(model, u0, yy):
+    with torch.no_grad():
+        pred = torch.zeros(yy.shape)
+        br = u0.unsqueeze(1).to(device)
+        for tt in range(len(t)):
+            tr = torch.FloatTensor(torch.column_stack((x.flatten(), torch.ones(x.shape)*tt))).to(device)
+            tr = tr.unsqueeze(0).repeat(br.shape[0], 1, 1)
+            y = yy[:,tt].to(device)
+            im = model(br, tr)
+            pred[:,tt] = im
+            
         # Performance Metrics
         MSE_error = (yy - pred).pow(2).mean()
         MAE_error = torch.abs(yy - pred).mean()
 
     return pred, MSE_error, MAE_error
-
 
 
 start_time = default_timer()
@@ -266,7 +271,7 @@ for ep in range(epochs): #Training Loop - Epochwise
     train_loss = train_loss # / ntrain / num_vars
     test_loss = test_loss #/ ntest / num_vars
 
-    print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 3)}, Test Loss: {round(test_loss,3)}")
+    print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss.item(),5)}")
     run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
     
     scheduler.step()
@@ -282,8 +287,8 @@ run.save_file(saved_model, 'output')
 
 # %%
 #Testing 
-test_trunk, test_branch, test_u_encoded = next(iter(test_loader))
-pred_set_encoded, mse, mae = validation_don(model, test_trunk, test_branch, test_u_encoded)
+test_u0, test_u_encoded = next(iter(test_loader))
+pred_set_encoded, mse, mae = validation_don(model, test_u0, test_u_encoded)
 
 print('Testing Error (MSE) : %.3e' % (mse))
 print('Testing Error (MAE) : %.3e' % (mae))
@@ -305,7 +310,7 @@ test_u = test_u.numpy().reshape(len(test_u), len(t), len(x))
 #Plotting the surrogate performance against that of the test data. 
 
 idx = np.random.randint(0, len(pred_set)) 
-idx = 5
+idx = 0
 x_range = x
 
 u_field_actual = test_u[idx]
@@ -339,7 +344,6 @@ ax.legend()
 plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
 plt.savefig(plot_name)
 run.save_file(plot_name, 'output')
-
 
 run.close()
 

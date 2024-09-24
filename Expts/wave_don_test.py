@@ -6,9 +6,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
-class DeepONetMultipleOutputs(nn.Module):
+class DeepONet(nn.Module):
     def __init__(self, branch_input_dim, trunk_input_dim, branch_hidden_layers, trunk_hidden_layers, output_dim):
-        super(DeepONetMultipleOutputs, self).__init__()
+        super(DeepONet, self).__init__()
         
         self.branch_net = self._create_mlp(branch_input_dim, branch_hidden_layers, output_dim)
         self.trunk_net = self._create_mlp(trunk_input_dim, trunk_hidden_layers, output_dim)
@@ -130,7 +130,7 @@ trunk_input_dim = 3  # x, y, t
 branch_hidden_layers = [64, 32]
 trunk_hidden_layers = [32, 16]
 output_dim = 1
-num_epochs = 5000
+num_epochs = 50
 batch_size = 1
 learning_rate = 0.001
 
@@ -141,7 +141,7 @@ dataset = generate_dataset(num_simulations, grid_size, num_timesteps)
 
 # %% 
 # Create and train the model
-model = DeepONetMultipleOutputs(branch_input_dim, trunk_input_dim, branch_hidden_layers, trunk_hidden_layers, output_dim)
+model = DeepONet(branch_input_dim, trunk_input_dim, branch_hidden_layers, trunk_hidden_layers, output_dim)
 train_deeponet(model, dataset, num_epochs, batch_size, learning_rate)
 
 # Visualize results
@@ -167,13 +167,12 @@ def calculate_and_visualize_error(model, initial_condition, target_solution, gri
         output = model(branch_input, trunk_input).detach().numpy().reshape(grid_size, grid_size)
         target = target_solution[t]
         
-        # error = np.abs(output - target)
-        error = target
+        error = np.abs(output - target)
         mse = np.mean(error**2)
         mse_errors.append(mse)
         
-        surf = axes[i].plot_surface(X, Y, error, cmap='viridis')
-        axes[i].set_title(f"Error at t = {t/(num_timesteps-1):.2f}\nMSE = {mse:.6f}")
+        surf = axes[i].plot_surface(X, Y, target, cmap='viridis')
+        axes[i].set_title(f"Target at t = {t/(num_timesteps-1):.2f}\nMSE = {mse:.6f}")
         axes[i].set_xlabel('x')
         axes[i].set_ylabel('y')
         axes[i].set_zlabel('Error')
