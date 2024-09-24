@@ -85,9 +85,8 @@ class DeepONet(torch.nn.Module):
         self.trunk = FNN(in_trunk, out_trunk, width_trunk, layers_trunk)
         self.b = torch.nn.parameter.Parameter(torch.tensor(0.0))
 
-    def forward(self, inputs):
-            x_func = inputs[0]
-            x_loc = inputs[1]
+    def forward(self, x_func, x_loc):
+            
             # Branch net to encode the input function
             x_func = self.branch(x_func)
             # Trunk net to encode the domain of the output function
@@ -97,8 +96,8 @@ class DeepONet(torch.nn.Module):
                 raise AssertionError(
                     "Output sizes of branch net and trunk net do not match."
                 )
-            x = torch.einsum("bi,bi->b", x_func, x_loc)
-            x = torch.unsqueeze(x, 1)
+            x = torch.einsum('ijk,ik->ij', x_loc, x_func)
+            x = torch.unsqueeze(x, -1)
             # Add bias
             x += self.b
             return x
@@ -110,18 +109,18 @@ class DeepONet(torch.nn.Module):
 
         return c
 # %% 
-#Example Usage
-model = DeepONet(in_branch=100,
-        width_branch=256,
-        layers_branch=4, 
-        out_branch=100,
-        in_trunk=2,
-        width_trunk=256,
-        layers_trunk=4, 
-        out_trunk=100)
+# #Example Usage
+# model = DeepONet(in_branch=100,
+#         width_branch=256,
+#         layers_branch=4, 
+#         out_branch=100,
+#         in_trunk=2,
+#         width_trunk=256,
+#         layers_trunk=4, 
+#         out_trunk=100)
 
-trunk_in = torch.randn(20, 100)
-branch_in = torch.randn(1, 2)
-output = model([trunk_in, branch_in])
-print(output.shape)
+# trunk_in = torch.randn(20, 100)
+# branch_in = torch.randn(20, 10000, 2)
+# output = model(trunk_in, branch_in)
+# print(output.shape)
 # %%

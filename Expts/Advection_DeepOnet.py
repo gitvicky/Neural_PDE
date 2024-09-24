@@ -118,6 +118,7 @@ class DON_Dataset(Dataset):
         self.X = X
         self.T = T
         self.initial_locations = initial_locations
+        self.x = torch.column_stack((self.X.flatten(), self.T.flatten()))
 
     def __len__(self):
         return self.u.shape[0]
@@ -127,10 +128,9 @@ class DON_Dataset(Dataset):
         u_ic = u_sample[0].flatten()
         u_init= u_ic[self.initial_locations]
         
-        x = torch.column_stack((self.X.flatten(), self.T.flatten()))
         u_flat = u_sample.flatten()
         
-        return torch.FloatTensor(u_init), torch.FloatTensor(x), torch.FloatTensor(u_flat).unsqueeze(1)
+        return torch.FloatTensor(u_init), torch.FloatTensor(self.x), torch.FloatTensor(u_flat).unsqueeze(1)
     
 # %% 
 x = torch.tensor(x, dtype=torch.float32)
@@ -207,6 +207,54 @@ epochs = configuration['Epochs']
 ####################################
 #Training Loop 
 ####################################
+def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
+    model.train()
+    train_loss = 0
+    for br, tr, yy in train_loader:
+        optimizer.zero_grad()
+        br = br.to(device)
+        tr = tr.to(device)
+        yy = yy.to(device)
+        batch_size = yy.shape[0]
+
+        im = model(br, tr)
+        loss = loss_func(im.reshape(batch_size, -1), yy.reshape(batch_size, -1))
+ 
+        loss.backward()
+        # torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
+        optimizer.step()
+
+        train_loss += loss.item()
+    
+    # Validation Loop
+    test_loss = 0
+    with torch.no_grad():
+        for br, tr, yy in test_loader:
+            br = br.to(device)
+            tr = tr.to(device)
+            yy = yy.to(device)
+            batch_size = br.shape[0]
+            out = model(br, tr)
+            test_loss += loss_func(out.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
+
+    return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
+
+def validation_don(model, br, tr, yy):
+    with torch.no_grad():
+        
+        br = br.to(device)
+        tr = tr.to(device)
+        yy = yy.to(device)
+        pred = model(br, tr)
+
+        # Performance Metrics
+        MSE_error = (yy - pred).pow(2).mean()
+        MAE_error = torch.abs(yy - pred).mean()
+
+    return pred, MSE_error, MAE_error
+
+
+
 start_time = default_timer()
 for ep in range(epochs): #Training Loop - Epochwise
 

@@ -240,11 +240,10 @@ def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
         optimizer.zero_grad()
         br = br.to(device)
         tr = tr.to(device)
-        xx = [br, tr]
         yy = yy.to(device)
         batch_size = yy.shape[0]
 
-        im = model(xx)
+        im = model(br, tr)
         loss = loss_func(im.reshape(batch_size, -1), yy.reshape(batch_size, -1))
  
         loss.backward()
@@ -256,17 +255,29 @@ def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
     # Validation Loop
     test_loss = 0
     with torch.no_grad():
-        for xx, yy in test_loader:
+        for br, tr, yy in test_loader:
             br = br.to(device)
             tr = tr.to(device)
-            xx = [br, tr]
             yy = yy.to(device)
-            batch_size = xx.shape[0]
-            out = model(xx)
+            batch_size = br.shape[0]
+            out = model(br, tr)
             test_loss += loss_func(out.reshape(batch_size, -1), yy.reshape(batch_size, -1)).item()
 
     return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
 
+def validation_don(model, br, tr, yy):
+    with torch.no_grad():
+        
+        br = br.to(device)
+        tr = tr.to(device)
+        yy = yy.to(device)
+        pred = model(br, tr)
+
+        # Performance Metrics
+        MSE_error = (yy - pred).pow(2).mean()
+        MAE_error = torch.abs(yy - pred).mean()
+
+    return pred, MSE_error, MAE_error
 
 # %% 
 ################################################################
