@@ -1,4 +1,5 @@
 # %%
+import os 
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -32,40 +33,22 @@ class DeepONet(nn.Module):
         
         return torch.sum(branch_output * trunk_output, dim=-1)
 
-def generate_gaussian_2d(x, y, amplitude, x0, y0, sigma_x, sigma_y):
-    return amplitude * np.exp(-((x - x0)**2 / (2 * sigma_x**2) + (y - y0)**2 / (2 * sigma_y**2)))
 
-def generate_dataset(num_simulations, grid_size, num_timesteps):
-    x = np.linspace(0, 1, grid_size)
-    y = np.linspace(0, 1, grid_size)
-    t = np.linspace(0, 1, num_timesteps)
+def get_dataset(num_simulations, num_timesteps):
+
+    data_loc = os.path.dirname(os.getcwd()) + '/Data'
+    data =  np.load(data_loc + '/Spectral_Wave_data_LHS.npz')
+
+    u_sol = data['u'].astype(np.float32)
+    x = data['x'].astype(np.float32)
+    y = data['y'].astype(np.float32)
+    t = data['t'].astype(np.float32)[:num_timesteps]
+    u = torch.from_numpy(u_sol)[:, :num_timesteps][:num_simulations]
+                                                   
     X, Y = np.meshgrid(x, y)
     
-    dataset = []
-    
-    for _ in range(num_simulations):
-        amplitude = np.random.uniform(0.5, 2.0)
-        x0, y0 = np.random.uniform(0, 1, 2)
-        sigma_x, sigma_y = np.random.uniform(0.05, 0.2, 2)
-        
-        initial_condition = generate_gaussian_2d(X, Y, amplitude, x0, y0, sigma_x, sigma_y)
-        
-        # Simulate wave equation (simplified)
-        u = np.zeros((num_timesteps, grid_size, grid_size))
-        u[0] = initial_condition
-        u[1] = initial_condition
-        
-        c = 1  # Wave speed
-        dx = 1 / (grid_size - 1)
-        dt = 1 / (num_timesteps - 1)
-        
-        for n in range(1, num_timesteps - 1):
-            u[n+1][1:-1,1:-1] = 2*u[n][1:-1,1:-1] - u[n-1][1:-1,1:-1] + c**2 * dt**2 * (
-                (u[n][2:, 1:-1] - 2*u[n][1:-1, 1:-1] + u[n][:-2, 1:-1]) / dx**2 +
-                (u[n][1:-1, 2:] - 2*u[n][1:-1, 1:-1] + u[n][1:-1, :-2]) / dx**2
-            )
-        
-        dataset.append((initial_condition.flatten(), u))
+    initial_conditions = u[:,0].flatten(start_dim=1, end_dim=-1)
+    dataset = [initial_conditions, u]
     
     return dataset
 
@@ -75,16 +58,17 @@ def train_deeponet(model, dataset, num_epochs, batch_size, learning_rate):
     
     for epoch in range(num_epochs):
         epoch_loss = 0
-        for initial_condition, u in dataset:
+        for idx in range(num_simulations):
+            initial_condition, u = dataset[0][idx], dataset[1][idx]
             branch_input = torch.FloatTensor(initial_condition).unsqueeze(0)
             
-            for t in range(u.shape[0]):
+            for t_idx in range(num_timesteps):
                 x = np.linspace(0, 1, u.shape[1])
                 y = np.linspace(0, 1, u.shape[2])
                 X, Y = np.meshgrid(x, y)
-                trunk_input = torch.FloatTensor(np.column_stack((X.flatten(), Y.flatten(), np.full(X.size, t/u.shape[0]))))
-                
-                target = torch.FloatTensor(u[t].flatten())
+                trunk_input = torch.FloatTensor(np.column_stack((X.flatten(), Y.flatten(), np.full(X.size, t_idx/u.shape[0]))))
+                target = torch.FloatTensor(u[t_idx].flatten())
+                # print(branch_input.shape, trunk_input.shape, target.shape)
                 
                 optimizer.zero_grad()
                 output = model(branch_input, trunk_input)
@@ -122,22 +106,21 @@ def visualize_results(model, initial_condition, grid_size, num_timesteps):
 
 # %% 
 # Set up parameters
-grid_size = 32
-num_timesteps = 50
+grid_size = 64
+num_timesteps = 20
 num_simulations = 10
 branch_input_dim = grid_size * grid_size
 trunk_input_dim = 3  # x, y, t
 branch_hidden_layers = [64, 32]
 trunk_hidden_layers = [32, 16]
 output_dim = 1
-num_epochs = 50
+num_epochs = 5000
 batch_size = 1
 learning_rate = 0.001
 
 # %%
-
 # Generate dataset
-dataset = generate_dataset(num_simulations, grid_size, num_timesteps)
+dataset = get_dataset(num_simulations, num_timesteps)
 
 # %% 
 # Create and train the model
@@ -184,6 +167,18 @@ def calculate_and_visualize_error(model, initial_condition, target_solution, gri
     print(f"Average MSE across visualized timesteps: {np.mean(mse_errors):.6f}")
 
 # Visualize error
-test_initial_condition, test_target_solution = dataset[0]
+test_initial_condition, test_target_solution = dataset[0][0].numpy(), dataset[1][0].numpy()
 calculate_and_visualize_error(model, test_initial_condition, test_target_solution, grid_size, num_timesteps)
+# %%
+x = np.linspace(0, 1, grid_size)
+y = np.linspace(0, 1, grid_size)
+X, Y = np.meshgrid(x, y)
+
+branch_input = torch.FloatTensor(test_initial_condition).unsqueeze(0)
+model_output = []
+for t_idx in range(num_timesteps):
+    trunk_input = torch.FloatTensor(np.column_stack((X.flatten(), Y.flatten(), np.full(X.size, t_idx/num_timesteps))))    
+    output = model(branch_input, trunk_input).detach().numpy().reshape(grid_size, grid_size)
+    model_output.append(output)
+model_output = np.array(model_output)
 # %%

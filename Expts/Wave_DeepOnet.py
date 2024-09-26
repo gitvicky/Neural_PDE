@@ -11,17 +11,17 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'DeepOnet',
-                 "Epochs": 500,
-                 "Batch Size": 100,
+                 "Epochs": 5000,
+                 "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
-                 "Scheduler Step": 1000,
+                 "Scheduler Step": 100,
                  "Scheduler Gamma": 0.5,
                  "Activation": 'GeLU',
                  "Physics Normalisation": 'No',
                  "Normalisation Strategy": 'Min-Max',
-                 "Layers": 4,
-                 "Width": 256, 
+                 "Layers": 3,
+                 "Width": 64, 
                  "Variables":1, 
                  "T_out": 20, 
                  "Loss Function": 'MSE',
@@ -85,7 +85,7 @@ u_sol = data['u'].astype(np.float32)
 x = data['x'].astype(np.float32)
 y = data['y'].astype(np.float32)
 t = data['t'].astype(np.float32)[:configuration['T_out']]
-u = torch.from_numpy(u_sol)[:, :configuration['T_out']]
+u = torch.from_numpy(u_sol)[:, :configuration['T_out']][:100]
 # u = u.permute(0, 2, 3, 1)
 
 # %% 
@@ -115,7 +115,6 @@ t = torch.tensor(t, dtype=torch.float32)
 X,Y = torch.meshgrid(x,y, indexing='ij')
 XY_loc = torch.column_stack((X.flatten(), Y.flatten()))
 initial_locations = np.arange(0, len(x)*len(y))
-u = torch.tensor(u, dtype=torch.float32)
 
 # %%
 #Normalising the train and test datasets with the preferred normalisation. 
@@ -147,8 +146,8 @@ normalizer = normalizer(u)
 #Setting up the Datasets and the Data Loaders
 dataset = DON_Dataset(normalizer.encode(u), initial_locations)
 
-train_size = int(0.8 * len(dataset))
-val_size = len(dataset) - train_size
+train_size = ntrain = int(0.8 * len(dataset))
+val_size = nval = len(dataset) - train_size
 
 train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
@@ -193,20 +192,22 @@ def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
     model.train()
     train_loss = 0
     for u0, uu in train_loader:
-        optimizer.zero_grad()
         br = u0.unsqueeze(1).to(device)
         for tt in range(len(t)):
             tr = torch.FloatTensor(torch.column_stack((XY_loc, torch.ones(X.flatten().shape)*tt))).to(device)
             tr = tr.unsqueeze(0).repeat(br.shape[0], 1, 1)
             u_t = uu[:,tt].flatten(start_dim=1, end_dim=-1).to(device)
+            
+            optimizer.zero_grad()
             im = model(br, tr)
             # print(br.shape, tr.shape, u_t.shape, im.shape)
             loss = loss_func(im, u_t)
             loss.backward()
             # torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
             optimizer.step()
+            train_loss += loss.item()
 
-        train_loss += loss.item()
+    train_loss =  train_loss / (len(train_loader)*train_loader.batch_size)
     
     # Validation Loop
     test_loss = 0
@@ -219,7 +220,9 @@ def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
                 u_t = uu[:,tt].flatten(start_dim=1, end_dim=-1).to(device)
                 im = model(br, tr)
                 test_loss += loss_func(im, u_t)
-                
+        
+        test_loss =  train_loss / (len(test_loader)*test_loader.batch_size)
+
     return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
 
 
@@ -249,10 +252,10 @@ for ep in range(epochs): #Training Loop - Epochwise
     train_loss, test_loss = train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer)
     t2 = default_timer()
 
-    train_loss = train_loss # / ntrain / num_vars
+    train_loss = train_loss  #/ ntrain / num_vars
     test_loss = test_loss #/ ntest / num_vars
 
-    print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss.item(),5)}")
+    print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss,5)}")
     run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
     
     scheduler.step()
