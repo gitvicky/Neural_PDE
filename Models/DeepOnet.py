@@ -78,7 +78,6 @@ class DeepONet(torch.nn.Module):
         ):
         super(DeepONet, self).__init__()
 
-
         # Fully connected network
         self.activation = activation
         self.branch = FNN(in_branch, out_branch, width_branch, layers_branch)
@@ -88,18 +87,22 @@ class DeepONet(torch.nn.Module):
     def forward(self, x_func, x_loc):
             
             # Branch net to encode the input function
-            x_func = self.branch(x_func)
+            branch_output = self.branch(x_func)
             # Trunk net to encode the domain of the output function
-            x_loc = self.activation(self.trunk(x_loc))
+            trunk_output  = self.trunk(x_loc)
+
             # Dot product
-            if x_func.shape[-1] != x_loc.shape[-1]:
+            if branch_output.shape[-1] != trunk_output.shape[-1]:
                 raise AssertionError(
                     "Output sizes of branch net and trunk net do not match."
                 )
-            x = torch.einsum('ijk,ik->ij', x_loc, x_func)
-            x = torch.unsqueeze(x, -1)
-            # Add bias
-            x += self.b
+            # x = torch.einsum('ijk,ik->ij', x_loc, x_func)
+            # x = torch.unsqueeze(x, -1)
+            # # Add bias
+            # x += self.b
+            
+            x = torch.sum(branch_output * trunk_output, dim=-1)
+
             return x
 
     def count_params(self):

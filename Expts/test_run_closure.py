@@ -8,7 +8,7 @@ configuration = {"Folder": 'Test',
 
 import os
 from simvue import Run
-run = Run(mode='online')
+run = simvue.Run(mode='online')
 run.init(folder="/Tests", tags=['Debug'], metadata=configuration)
 
 import torch 
