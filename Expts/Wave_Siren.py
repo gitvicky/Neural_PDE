@@ -11,9 +11,8 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'Siren', #Siren or MFN
-                 "Epochs": 500,
-                 "Batch Size": 200, #Actual batch will be Batch Size * Points
-                 "Points": 10000, #Points sampled for from the grid.  
+                 "Epochs": 50,
+                 "Batch Size": 1, 
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
                  "Scheduler Step": 100,
@@ -23,10 +22,11 @@ configuration = {"Case": 'Wave',
                  "Normalisation Strategy": 'Min-Max',
                  "T_range": 80, #Full range of time instances
                  "Layers": 5,                 
-                 "Width": 256, 
+                 "Width": 64, 
                  "Coords": 3, #Number of spatio-temporal coordinates - would form the number of inputs 
                  "Variables":1, #Number of variables being modelled - would form the number of outputs. 
-                 "Context": 800,
+                 "Context": 1024,
+                 "T_out": 20, 
                  "Loss Function": 'MSE',
                  "UQ": 'None', #None, Dropout
                  }
@@ -38,7 +38,7 @@ run = Run(mode='online')
 run.init(folder="/Neural_PDE", tags=['NPDE', 'Siren', 'Tests', 'INR', configuration['Model']], metadata=configuration)
 
 # Saving the current run file and the git hash of the repo
-run.save(os.path.abspath(__file__), 'code')
+run.save_file(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
@@ -50,6 +50,7 @@ import sys
 import numpy as np
 from tqdm import tqdm 
 import torch
+from torch.utils.data import Dataset, DataLoader
 import matplotlib
 import matplotlib.pyplot as plt
 import time 
@@ -81,67 +82,56 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Loading Data 
 ################################################################
 
-# %%
 t1 = default_timer()
 data =  np.load(data_loc + '/Spectral_Wave_data_LHS.npz')
 
 u_sol = data['u'].astype(np.float32)
 x = data['x'].astype(np.float32)
 y = data['y'].astype(np.float32)
-t = data['t'].astype(np.float32)
-u = torch.from_numpy(u_sol)
-u = u.permute(0, 2, 3, 1)
-n_sims = len(u_sol)
+t = data['t'].astype(np.float32)[:configuration['T_out']]
+u = torch.from_numpy(u_sol)[:, :configuration['T_out']][:10]
+# u = u.permute(0, 2, 3, 1)
+n_sims = len(u)
+
+# %% 
+#Setting up the Data for any Coordinate-based MLP
+
+class CoMLP_Dataset(Dataset):
+    def __init__(self, u, x, y, t, initial_locations):
+        self.u = u
+        self.x = x
+        self.y = y
+        self.t = t
+        self.initial_locations = initial_locations
+        self.X, self.Y = torch.meshgrid(x,y, indexing='ij')
+
+    def __len__(self):
+        return self.u.shape[0]
+    
+    def get_coords(self, T):
+        coords = torch.FloatTensor(torch.column_stack((self.X.flatten(), self.Y.flatten(), torch.ones(self.X.flatten().shape)*T))).to(device)
+        return coords
+
+    def __getitem__(self, idx):
+        u_sample = self.u[idx]
+        u_ic = u_sample[0].flatten()
+        u_init= u_ic[self.initial_locations]
+        
+        return torch.FloatTensor(u_init), torch.FloatTensor(u_sample)
 
 # %% 
-ntrain = 800
-ntest = 200
+ntrain = int(0.8 * len(u))
+ntest = len(u) - ntrain
 S = u_sol.shape[-1]#Grid Size
 
-#Extracting configuration files
-num_coords = configuration['Coords']
-num_vars = configuration['Variables']
-layers = configuration['Layers']
-width = configuration['Width']
-batch_size = configuration['Batch Size']
-T_range = configuration['T_range']
-num_points = configuration["Points"]
-
-#Slicing the fields and setting up the coordinate meshes. 
-t = t[:T_range]
-u = u[...,:T_range]
-xx, yy, tt = np.meshgrid(x, y, t)
-
-#Stacked coordinate values and corresponding field values stacked. 
-aa = np.vstack((xx.flatten(), yy.flatten(), tt.flatten() )).T
-uu = u.reshape(u.shape[0], int(u.shape[1]*u.shape[2]*u.shape[3])).unsqueeze(-1)
-
-#coordinates 
-coords = torch.tensor(aa, dtype=torch.float32)
-
-#Getting the context from the initial conditions
-context_len = configuration['Context']
-aa_context = sample_equidistant(u[...,0], context_len)
-
-# %% 
-#Selecting a Random subset of coordinates from the Grid. 
-idx = np.random.randint(len(coords), size=num_points)
-co = torch.tile(coords[idx], (n_sims,1,1))
-aa_context = torch.tile(torch.unsqueeze(aa_context,1), (1,num_points,1))
-uu = uu[:,idx,:]
-
-# %% 
-train_a = torch.hstack((co[:ntrain].flatten(0,1), aa_context[:ntrain].flatten(0,1)))
-train_u = uu[:ntrain].flatten(0,1)
-
-test_a = torch.hstack((co[-ntest:].flatten(0,1), aa_context[-ntest:].flatten(0,1)))
-test_u = uu[-ntest:].flatten(0,1)
-
-print("Training Input: " + str(train_a.shape))
-print("Training Output: " + str(train_u.shape))
-
-# %%
-#Normalising the train and test datasets with the preferred normalisation. 
+# Setting up the Data for DON
+x = torch.tensor(x, dtype=torch.float32)
+y = torch.tensor(y, dtype=torch.float32)
+t = torch.tensor(t, dtype=torch.float32)
+X,Y = torch.meshgrid(x,y, indexing='ij')
+XY_loc = torch.column_stack((X.flatten(), Y.flatten()))
+initial_locations = np.arange(0, len(x)*len(y))[::4]
+context_len = len(initial_locations)
 
 norm_strategy = configuration['Normalisation Strategy']
 
@@ -151,30 +141,31 @@ elif norm_strategy == 'Range':
     normalizer = RangeNormalizer
 elif norm_strategy == 'Gaussian':
     normalizer = GaussianNormalizer
+elif norm_strategy == 'Identity':
+    normalizer = Identity
 
-a_normalizer = normalizer(train_a)
-u_normalizer = normalizer(train_u)
+normalizer = normalizer(u)
 
-coords_norm = a_normalizer.encode(coords)
-train_a = a_normalizer.encode(train_a)
-test_a = a_normalizer.encode(test_a)
+# #Saving Normalisation 
+# saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz'
 
-train_u = u_normalizer.encode(train_u)
-test_u_encoded = u_normalizer.encode(test_u)
+# np.savez(saved_normalisations, 
+#         a= normalizer.a.numpy(), b = normalizer.b.numpy()
+# )
 
-#Saving Normalisation 
-saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' + run.name + '_' + 'norms.npz'
+# run.save_file(saved_normalisations, 'output')
 
-np.savez(saved_normalisations, 
-        in_a=a_normalizer.a.numpy(), in_b=a_normalizer.b.numpy(), 
-        out_a=u_normalizer.a.numpy(), out_b=u_normalizer.b.numpy()
-        )
+# %% 
+#Setting up the Datasets and the Data Loaders
+dataset = CoMLP_Dataset(normalizer.encode(u), x, y, t, initial_locations)
 
-run.save(saved_normalisations, 'output')
-# %%
-#Setting up the data loaders. 
-train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_a, train_u), batch_size=batch_size*num_points, shuffle=True)
-test_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(test_a, test_u_encoded), batch_size=batch_size*num_points, shuffle=False)
+ntrain = int(0.8 * len(dataset))
+ntest = len(dataset) - ntrain
+
+train_dataset, test_dataset = torch.utils.data.random_split(dataset, [ntrain, ntest])
+
+train_loader = DataLoader(train_dataset, batch_size=configuration['Batch Size'], shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=configuration['Batch Size'])
 
 t2 = default_timer()
 print('preprocessing finished, time used:', t2-t1)
@@ -184,10 +175,66 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
+def train_one_epoch_INR(model, train_loader, test_loader, loss_func, optimizer):
+    model.train()
+    train_loss = 0
+    for u0, uu in train_dataset:
+        context = u0.to(device)
+        for tt in range(len(t)):
+            coords = dataset.get_coords(tt).to(device)
+            inputs = torch.column_stack((coords, context.unsqueeze(0).repeat(len(coords), 1)))
+            ut = uu[tt].flatten(start_dim=0, end_dim=-1).unsqueeze(1).to(device)
+            optimizer.zero_grad()
+            im = model(inputs)[0]
+            # print(coords.shape, context.shape, inputs.shape, ut.shape, im.shape)
+            loss = loss_func(im, ut)
+            loss.backward()
+            # torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
+            optimizer.step()
+            train_loss += loss.item()
+
+    train_loss =  train_loss / (len(initial_locations))
+    
+    # Validation Loop
+    test_loss = 0
+    with torch.no_grad():
+        for u0, uu in test_dataset:
+            context = u0.to(device)
+            for tt in range(len(t)):
+                coords = dataset.get_coords(tt).to(device)
+                inputs = torch.column_stack((coords, context.unsqueeze(0).repeat(len(coords), 1)))
+                ut = uu[tt].flatten(start_dim=0, end_dim=-1).unsqueeze(1).to(device)
+                im = model(inputs)[0]
+                test_loss += loss_func(im, ut)
+        
+        test_loss =  train_loss / (len(test_loader)*test_loader.batch_size)
+
+    return train_loss, test_loss #remember to divide the ntrain/ntest and num_vars at the other end before logging.
+
+
+def validation_INR(model, u0, uu):
+    with torch.no_grad():
+        pred = torch.zeros(uu.shape)
+        context = u0.to(device)
+        for tt in range(len(t)):
+            coords = dataset.get_coords(tt).to(device)
+            inputs = torch.column_stack((coords, context.unsqueeze(0).repeat(len(coords), 1)))
+            ut = uu[tt].flatten(start_dim=0, end_dim=-1).unsqueeze(1).to(device)
+            im = model(inputs)[0]
+            pred[:,tt] = im.reshape(im.shape[0], len(x), len(y))
+            
+        # Performance Metrics
+        MSE_error = (uu - pred).pow(2).mean()
+        MAE_error = torch.abs(uu - pred).mean()
+
+    return pred, MSE_error, MAE_error
+
+
+
 if configuration['Model'] == 'Siren':
-    model = Siren(in_features=num_coords+context_len, hidden_features=width, hidden_layers=layers, out_features=num_vars)
+    model = Siren(in_features=configuration['Coords']+context_len, hidden_features=configuration['Width'], hidden_layers=configuration['Layers'], out_features=configuration['Variables'])
 elif configuration['Model'] == 'MFN':
-    model = FourierNet(in_size=num_coords+context_len, hidden_size=width, n_layers=layers, out_size=num_vars)
+    model = FourierNet(in_size=configuration['Coords']+context_len, hidden_size=configuration['Width'], n_layers=configuration['Layers'], out_size=configuration['Variables'])
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})
@@ -221,107 +268,68 @@ for ep in range(epochs): #Training Loop - Epochwise
 
 train_time = default_timer() - start_time
 
-
 # %%
 #Saving the Model
 saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '.pth'
 torch.save( model.state_dict(), saved_model)
-run.save(saved_model, 'output')
+run.save_file(saved_model, 'output')
 # %%
-#Validation using newly generated simulation data.
+#Testing 
+test_u0, test_u_encoded = next(iter(test_loader))
+pred_set_encoded, mse, mae = validation_INR(model, test_u0, test_u_encoded)
 
-#Example of Usage
-Nx = 64 # Mesh Discretesiation 
-Nt = 100 #Max time
-x_min = -1.0 # Minimum value of x
-x_max = 1.0 # maximum value of x
-y_min = -1.0 # Minimum value of y 
-y_max = 1.0 # Minimum value of y
-tend = 1
-Lambda = 20
-aa = 0.25
-bb = 0.25
-c = 1.0 # Wave Speed <=1.0
-
-#Initialising the Solver
-from Neural_PDE.Numerical_Solvers.Wave.Wave_2D_Spectral import * 
-solver = Wave_2D(Nx, x_min, x_max, tend, c)
-x, y, t, u_sol = solver.solve(Lambda, aa, bb)
-
-u = torch.tensor(u_sol, dtype=torch.float32)
-u = u.permute(1,2,0)
-t = t[:T_range]
-u = u[...,:T_range]
-xx, yy, tt = np.meshgrid(x, y, t)
-
-#Stacked cooredinate values and corresponding field values stacked. 
-aa = np.vstack((xx.flatten(), yy.flatten(), tt.flatten() )).T
-uu = u.flatten().unsqueeze(-1)
-
-#coordinates 
-coords = torch.tensor(aa, dtype=torch.float32).unsqueeze(0)
-aa_context = sample_equidistant(u[...,0].unsqueeze(0), context_len)
-aa_context = torch.tile(torch.unsqueeze(aa_context,1), (1,int(Nx*Nx*len(t)),1))
-
-test_a = torch.hstack((coords.flatten(0,1), aa_context.flatten(0,1)))
-test_u = uu
-
-test_a = a_normalizer.encode(test_a)
-test_u = test_u
-test_u_encoded = u_normalizer.encode(test_u)
-pred_set_encoded, mse, mae = validation(model, test_a, test_u_encoded)
-# %%
-print('(MSE) Testing Error: %.3e' % (mse))
-print('(MAE) Testing Error: %.3e' % (mae))
+print('Testing Error (MSE) : %.3e' % (mse))
+print('Testing Error (MAE) : %.3e' % (mae))
 
 run.update_metadata({'Training Time': float(train_time),
                      'MSE Test Error': float(mse),
                      'MAE Test Error': float(mae)
                     })
 
-#%%
-#Denormalising the predictions
-pred_set = u_normalizer.decode(pred_set_encoded.to(device)).cpu().detach().numpy()
+#Denormalising and reshaping the target and the predictions
+pred_set = normalizer.decode(pred_set_encoded.to(device)).cpu()
+pred_set = pred_set.reshape(len(pred_set), len(t), len(x), len(y))
 
-# Rearranging the Predictions for Evaluation. 
-ntest = 1
-test_u = test_u.reshape(ntest, num_vars, Nx, Nx, T_range)
-pred_set = pred_set.reshape(ntest, num_vars, Nx, Nx, T_range)
+test_u = normalizer.decode(test_u_encoded.to(device)).cpu()
+test_u = test_u.reshape(len(test_u), len(t), len(x), len(y))
+
 # %% 
-#Plotting the performance
+#Plotting performance
+
 idx = 0
+T_out = configuration['T_out']
 u_field = test_u[idx]
     
-v_min_1 = torch.min(u_field[0, :, :, 0])
-v_max_1 = torch.max(u_field[0, :, :, 0])
+v_min_1 = torch.min(u_field[0])
+v_max_1 = torch.max(u_field[0])
 
-v_min_2 = torch.min(u_field[0, :, :, int(T_range/ 2)])
-v_max_2 = torch.max(u_field[0, :, :, int(T_range/ 2)])
+v_min_2 = torch.min(u_field[int(T_out/ 2)])
+v_max_2 = torch.max(u_field[int(T_out/ 2)])
 
-v_min_3 = torch.min(u_field[0, :, :, -1])
-v_max_3 = torch.max(u_field[0, :, :, -1])
+v_min_3 = torch.min(u_field[-1])
+v_max_3 = torch.max(u_field[-1])
 
 fig = plt.figure(figsize=plt.figaspect(0.5))
 ax = fig.add_subplot(2, 3, 1)
-pcm = ax.imshow(u_field[0, :, :, 0], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_1, vmax=v_max_1)
+pcm = ax.imshow(u_field[0], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_1, vmax=v_max_1)
 # ax.title.set_text('Initial')
-ax.title.set_text('t=' + str('0'))
+ax.title.set_text('t=' + str(0))
 ax.set_ylabel('Solution')
 fig.colorbar(pcm, pad=0.05)
 
 ax = fig.add_subplot(2, 3, 2)
-pcm = ax.imshow(u_field[0, :, :, int(T_range/ 2)], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_2,
+pcm = ax.imshow(u_field[int(T_out/ 2)], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_2,
                 vmax=v_max_2)
 # ax.title.set_text('Middle')
-ax.title.set_text('t=' + str(int((T_range) / 2)))
+ax.title.set_text('t=' + str(int(T_out / 2)))
 ax.axes.xaxis.set_ticks([])
 ax.axes.yaxis.set_ticks([])
 fig.colorbar(pcm, pad=0.05)
 
 ax = fig.add_subplot(2, 3, 3)
-pcm = ax.imshow(u_field[0, :, :, -1], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_3, vmax=v_max_3)
+pcm = ax.imshow(u_field[-1], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_3, vmax=v_max_3)
 # ax.title.set_text('Final')
-ax.title.set_text('t=' + str(T_range))
+ax.title.set_text('t=' + str(T_out))
 ax.axes.xaxis.set_ticks([])
 ax.axes.yaxis.set_ticks([])
 fig.colorbar(pcm, pad=0.05)
@@ -329,20 +337,20 @@ fig.colorbar(pcm, pad=0.05)
 u_field = pred_set[idx]
 
 ax = fig.add_subplot(2, 3, 4)
-pcm = ax.imshow(u_field[0, :, :, 0], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_1, vmax=v_max_1)
-ax.set_ylabel('SirenNet')
+pcm = ax.imshow(u_field[0], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_1, vmax=v_max_1)
+ax.set_ylabel('INR')
 
 fig.colorbar(pcm, pad=0.05)
 
 ax = fig.add_subplot(2, 3, 5)
-pcm = ax.imshow(u_field[0, :, :, int(T_range/ 2)], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_2,
+pcm = ax.imshow(u_field[int(T_out/ 2)], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_2,
                 vmax=v_max_2)
 ax.axes.xaxis.set_ticks([])
 ax.axes.yaxis.set_ticks([])
 fig.colorbar(pcm, pad=0.05)
 
 ax = fig.add_subplot(2, 3, 6)
-pcm = ax.imshow(u_field[0, :, :, -1], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_3, vmax=v_max_3)
+pcm = ax.imshow(u_field[-1], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_3, vmax=v_max_3)
 ax.axes.xaxis.set_ticks([])
 ax.axes.yaxis.set_ticks([])
 fig.colorbar(pcm, pad=0.05)
@@ -350,7 +358,6 @@ fig.colorbar(pcm, pad=0.05)
 
 plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
 plt.savefig(plot_name)
-run.save(plot_name, 'output')
+run.save_file(plot_name, 'output')
 
 run.close()
-# %%

@@ -11,8 +11,8 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'DeepOnet',
-                 "Epochs": 5000,
-                 "Batch Size": 50,
+                 "Epochs": 1000,
+                 "Batch Size": 100,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
                  "Scheduler Step": 100,
@@ -85,7 +85,7 @@ u_sol = data['u'].astype(np.float32)
 x = data['x'].astype(np.float32)
 y = data['y'].astype(np.float32)
 t = data['t'].astype(np.float32)[:configuration['T_out']]
-u = torch.from_numpy(u_sol)[:, :configuration['T_out']][:100]
+u = torch.from_numpy(u_sol)[:, :configuration['T_out']][:50]
 # u = u.permute(0, 2, 3, 1)
 
 # %% 
