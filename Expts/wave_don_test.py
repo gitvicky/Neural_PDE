@@ -37,6 +37,7 @@ class DeepONet(nn.Module):
 def get_dataset(num_simulations, num_timesteps):
 
     data_loc = os.path.dirname(os.getcwd()) + '/Data'
+    print(data_loc)
     data =  np.load(data_loc + '/Spectral_Wave_data_LHS.npz')
 
     u_sol = data['u'].astype(np.float32)
