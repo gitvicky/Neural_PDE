@@ -135,6 +135,7 @@ x = torch.randn(1, in_channels, img_size, img_size)
 output = model(x)
 print(f"Input shape: {x.shape}")
 print(f"Output shape: {output.shape}")
+print(f"Paramters: {model.count_params()}")
 # %%
 #Including both the variables and the time -- Batch, Variables, Nt, Nx, Ny
 
