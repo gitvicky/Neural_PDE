@@ -225,6 +225,7 @@ class VisionTransformer(nn.Module):
         self.out_channels = out_channels
 
     def forward(self, x):
+        x = x.permute(0, 1, 4, 2, 3)
         x = self.patch_embed(x)
         x = x + self.pos_embed
         x = self.pos_drop(x)
@@ -240,6 +241,7 @@ class VisionTransformer(nn.Module):
                    self.patch_size[0], self.patch_size[1], self.patch_size[2], self.out_channels)
         x = x.permute(0, 7, 1, 4, 2, 5, 3, 6).contiguous()
         x = x.view(B, self.out_channels, self.time_channels, self.img_size[0], self.img_size[1])
+        x = x.permute(0, 1, 3, 4, 2)
 
         return x
     
@@ -272,7 +274,7 @@ model = VisionTransformer(
 )
 
 # Generate a random input tensor
-x = torch.randn(1, in_channels, time_channels, img_size[0], img_size[1])
+x = torch.randn(1, in_channels, img_size[0], img_size[1], time_channels)
 
 # Forward pass
 output = model(x)
