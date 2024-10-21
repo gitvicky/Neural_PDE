@@ -6,8 +6,8 @@ FNO modelled over the 2D Navier-Stokes equations auto-regressively
 """
 
 # %%
-configuration = {"Case": 'Navier-Stokes',
-                 "Field": 'u, v, p, w',
+configuration = {"Case": 'Navier-Stokes Incomp.',
+                 "Field": 'u, v',
                  "Model": 'FNO',
                  "Epochs": 500,
                  "Batch Size": 5,
@@ -24,7 +24,7 @@ configuration = {"Case": 'Navier-Stokes',
                  "Width_time": 16, 
                  "Width_vars": 0,  
                  "Modes": 8,
-                 "Variables":4, 
+                 "Variables":2, 
                  "Loss Function": 'LP',
                  "UQ": 'None', #None, Dropout
                  }
@@ -33,7 +33,7 @@ configuration = {"Case": 'Navier-Stokes',
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'PIUQ', 'AR', 'NS'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'PIUQ', 'AR', 'NS_incomp'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
 run.save_file(os.path.abspath(__file__), 'code')
@@ -81,33 +81,26 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ################################################################
 
 # %%
+#PDEBench data
 t1 = default_timer()
-data =  np.load(data_loc + '/NS_Spectral_combined.npz')
 
-u = data['u'].astype(np.float32)[:, ::2]
-v = data['v'].astype(np.float32)[:, ::2]
-p = data['p'].astype(np.float32)[:, ::2]
-w = data['w'].astype(np.float32)[:, ::2]
-x = data['x'].astype(np.float32)
-y = data['x'].astype(np.float32)
-dt = data['dt'].astype(np.float32) * 2 
+uv = np.load('/home/ir-gopa2/rds/rds-ukaea-ap001/ir-gopa2/Code/NOs_for_POs/Data/' + 'NS_incomp_velocity_100_128_128.npy') #uv being the two compnoents of velocity
+uv = torch.tensor(uv, dtype=torch.float) #Converting to tensor
+# uv = uv[:,:configuration['T_out']] #Trimming upto the required time. 
+field = ['u', 'v']
+if configuration['Model'] == 'FNO': 
+    uv = uv.permute(0, 4, 2, 3, 1)
+if configuration['Model'] == 'ViT':
+    uv = uv.permute(0, 4, 2, 3, 1)
+t = np.arange(0, 5.0, 0.005)
 
-def stacked_fields(variables):
-    stack = []
-    for var in variables:
-        var = torch.from_numpy(var) #Converting to Torch
-        var = var.permute(0, 2, 3, 1) #Permuting to be BS, Nx, Ny, Nt
-        stack.append(var)
-    stack = torch.stack(stack, dim=1)
-    return stack
+vars = uv
 
-vars = stacked_fields([u,v,p,w])
-
-field = ['u', 'v', 'p', 'w']
+field = ['u', 'v']
 
 # %% 
-ntrain = 200
-ntest = 200
+ntrain = 80
+ntest = 20
 
 #Extracting configuration files
 T_in = configuration['T_in']
