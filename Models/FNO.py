@@ -139,16 +139,8 @@ class FNO_multi2d(nn.Module):
         # self.padding = 8 # pad the domain if input is non-periodic
 
         self.fourier_layers = nn.ModuleList()
-
         for _ in range(num_layers):
             self.fourier_layers.append(FNO2d(self.modes1, self.modes2, self.num_vars, self.width_time))
-
-        # self.f0 = FNO2d(self.modes1, self.modes2, self.num_vars, self.width_time)
-        # self.f1 = FNO2d(self.modes1, self.modes2, self.num_vars, self.width_time)
-        # self.f2 = FNO2d(self.modes1, self.modes2, self.num_vars, self.width_time)
-        # self.f3 = FNO2d(self.modes1, self.modes2, self.num_vars, self.width_time)
-        # self.f4 = FNO2d(self.modes1, self.modes2, self.num_vars, self.width_time)
-        # self.f5 = FNO2d(self.modes1, self.modes2, self.num_vars, self.width_time)
 
         # self.norm = nn.InstanceNorm2d(self.width)
         self.norm = nn.Identity()
@@ -166,15 +158,10 @@ class FNO_multi2d(nn.Module):
         grid = grid.permute(0, 4, 1, 2, 3)
 
         # x = F.pad(x, [0,self.padding, 0,self.padding]) # pad the domain if input is non-periodic
-
-        for layer in self.fourier_layers:
-            x = layer(x, grid )
-        # x0 = self.f0(x, grid)
-        # x = self.f1(x0, grid)
-        # x = self.f2(x, grid) + x0
-        # x1 = self.f3(x, grid)
-        # x = self.f4(x1, grid)
-        # x = self.f5(x, grid) + x1
+        
+        #Skip connections removed.  
+        for ii, layer in enumerate(self.fourier_layers):
+            x = layer(x, grid)
 
         # x = x[..., :-self.padding, :-self.padding] # pad the domain if input is non-periodic
 
