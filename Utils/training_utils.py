@@ -19,6 +19,8 @@ from timeit import default_timer
 from tqdm import tqdm
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+max_grad_clip_norm = 2.0
+
 
 def train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, step, T_out):
     model.train()
@@ -62,7 +64,7 @@ def train_one_epoch_AR(model, train_loader, test_loader, loss_func, optimizer, s
         train_l2_full += l2_full.item()
 
         loss.backward()
-        # torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
+        torch.nn.utils.clip_grad_norm(parameters=model.parameters(), max_norm=max_grad_clip_norm, norm_type=2.0)
         optimizer.step()
 
     train_loss = train_l2_full 
