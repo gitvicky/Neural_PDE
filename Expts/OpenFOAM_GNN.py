@@ -28,17 +28,21 @@ configuration = {"Case": 'Turbulent Wake',
                  }
 
 import os
-# from simvue import Run
-# run = Run(mode='disabled')
-# run.init(folder="/Neural_PDE", tags=['NPDE', configuration['Model'], 'AR', 'Wake', 'Turbulent'], metadata=configuration)
+from simvue import Run
+run = Run(mode='disabled')
+run.init(folder="/Neural_PDE", tags=['NPDE', configuration['Model'], 'AR', 'Wake', 'Turbulent'], metadata=configuration)
 
-# #Saving the current run file and the git hash of the repo
-# run.save_file(os.path.abspath(__file__), 'code')
-# import git
-# repo = git.Repo(search_parent_directories=True)
-# sha = repo.head.object.hexsha
-# run.update_metadata({'Git Hash': sha})
+#Saving the current run file and the git hash of the repo
+run.save_file(os.path.abspath(__file__), 'code')
+import git
+repo = git.Repo(search_parent_directories=True)
+sha = repo.head.object.hexsha
+run.update_metadata({'Git Hash': sha})
 
+#Setting up locations. 
+file_loc = os.getcwd()
+model_loc = file_loc + '/Weights'
+plot_loc = file_loc + '/Plots'
 # %% #Importing the necessary packages
 import sys
 import numpy as np
@@ -112,11 +116,14 @@ if configuration['Model'] == 'GCN':
 if configuration['Model'] == 'NNConv':
     model = NNConvNet(in_channels=3, hidden_channels=64, out_channels=3, num_layers=2, edge_dim=4).to(device)
 
+run.update_metadata({'Number of Params': int(model.count_params())})
+
 optimizer = torch.optim.Adam(model.parameters(), lr=configuration['Learning Rate'], weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=configuration['Scheduler Step'], gamma=configuration['Scheduler Gamma'])
 loss_func = nn.MSELoss()
 # %% 
 # Training 
+start_time = default_timer()
 epochs = configuration['Epochs']
 for ep in tqdm(range(epochs)):
     model.train()
@@ -134,6 +141,14 @@ for ep in tqdm(range(epochs)):
         optimizer.step()
     scheduler.step()
     print(f'Epoch {ep+1}/{epochs}, Loss: {loss_epoch/ntrain:.6f}')
+    run.log_metrics({'Train Loss': loss_epoch/ntrain})
+
+train_time = default_timer() - start_time
+
+#Saving the Model
+saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '.pth'
+torch.save( model.state_dict(), saved_model)
+run.save(saved_model, 'output')
 
 # %% 
 #Evaluation. 
@@ -155,9 +170,15 @@ with torch.no_grad():
 
 pred_uu = [t.unsqueeze(0) for t in pred_uu]
 pred_uu = torch.cat(pred_uu, dim=1)
+
+mse = (pred_uu - test_uu[:, 1:]).pow(2).mean()
+print('(MSE) Testing Error: %.3e' % (mse))
+
+run.update_metadata({'Training Time': float(train_time),
+                     'MSE Test Error': float(mse)
+                    })
 # %% 
 #Plotting
-
 from matplotlib.tri import Triangulation
 def plot_unstructured(x, y, values, title="Field"):
     """
@@ -204,9 +225,23 @@ def plot_unstructured(x, y, values, title="Field"):
 # Create the plot
 sim_idx = 0 
 t_idx = 10
-var = 0
-fig, ax = plot_unstructured(x, y, test_uu[sim_idx, t_idx+1, : ,var])
-fig, ax = plot_unstructured(x, y, pred_uu[sim_idx, t_idx, : ,var])
-plt.show()
-# plt.savefig('comparison.png')
+var = 0 #u
+fig, ax = plot_unstructured(x, y, test_uu[sim_idx, t_idx+1, : ,var], title='Ux - Actual')
+fig, ax = plot_unstructured(x, y, pred_uu[sim_idx, t_idx, : ,var], title='Ux - Prediction')
+plt.savefig('Ux.png')
+run.save('Ux.png', 'output')
+
+var = 1 #v
+fig, ax = plot_unstructured(x, y, test_uu[sim_idx, t_idx+1, : ,var], title='Uy - Actual')
+fig, ax = plot_unstructured(x, y, pred_uu[sim_idx, t_idx, : ,var], title='Uy - Prediction')
+plt.savefig('Uy.png')
+run.save('Uy.png', 'output')
+
+var = 2 #v
+fig, ax = plot_unstructured(x, y, test_uu[sim_idx, t_idx+1, : ,var], title='P - Actual')
+fig, ax = plot_unstructured(x, y, pred_uu[sim_idx, t_idx, : ,var], title='P - Prediction')
+plt.savefig('P.png')
+run.save('P.png', 'output')
+
+run.close()
 # %%

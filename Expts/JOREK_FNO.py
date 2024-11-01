@@ -65,7 +65,7 @@ from Neural_PDE.Utils.processing_utils import *
 from Neural_PDE.Utils.training_utils import * 
 
 # %% 
-#Settung up locations. 
+#Setting up locations. 
 file_loc = os.getcwd()
 # data_loc = os.path.dirname(os.getcwd()) + '/Data'
 data_loc = '/home/ir-gopa2/rds/rds-ukaea-ap001/ir-gopa2/Data'
