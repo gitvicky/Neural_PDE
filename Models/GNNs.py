@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch_geometric.data import Data
 
 
-def get_graph(u_in: np.array ,x_in: np.array, r: float) -> Data:
+def get_graph(u_in: torch.tensor ,x_in: torch.tensor, r: float) -> Data:
     """
     Create a graph from input node positions and features.
 
@@ -28,10 +28,10 @@ def get_graph(u_in: np.array ,x_in: np.array, r: float) -> Data:
     - Edge attributes are the concatenated positions of the connected nodes.
     """
     # Reshape node features to (num_nodes, 1)
-    node_features = torch.from_numpy(u_in).float()
+    node_features = u_in.float()
 
     # Ensure x_in is a 2D tensor
-    x_in = torch.tensor(x_in).squeeze()
+    x_in = x_in.float().squeeze()
     if x_in.dim() == 1:
         x_in = x_in.unsqueeze(1)
 
@@ -48,7 +48,6 @@ def get_graph(u_in: np.array ,x_in: np.array, r: float) -> Data:
 
     # Create and return the Data object
     return Data(x=node_features, edge_index=edge_index, edge_attr=edge_attr)
-
 
 
 #Building Block MLP. 
@@ -106,9 +105,12 @@ class GCN(nn.Module):
 # x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
 # xx, yy = np.meshgrid(x, y)
 # x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# x_in = torch.tensor(x_in, dtype=torch.float32)
 # u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
 # u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
 # u_in = u_in.reshape(u_in.shape[0], -1, 1)
+# u_in = torch.tensor(u_in, dtype=torch.float32)
+
 # graph_data = get_graph(u_in, x_in, r=0.05)#Obtains the node features (num_nodes, num_features), the edge indices that fall within a raius of r next to the node in the form of the adjacency matrix (num_edges, 2) and 
 #                                          # the edge attributes which is of shape (num_edges, 4) 4 - coming from the positional values of the nodes (directions of the graph edges)
 
@@ -166,9 +168,12 @@ class NNConvNet(nn.Module):
 # x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
 # xx, yy = np.meshgrid(x, y)
 # x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# x_in = torch.tensor(x_in, dtype=torch.float32)
 # u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
 # u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
 # u_in = u_in.reshape(u_in.shape[0], -1, 1)
+# u_in = torch.tensor(u_in, dtype=torch.float32)
+
 # graph_data = get_graph(u_in, x_in, r=0.05)#Obtains the node features (num_nodes, num_features), the edge indices that fall within a raius of r next to the node in the form of the adjacency matrix (num_edges, 2) and 
 #                                          # the edge attributes which is of shape (num_edges, 4) 4 - coming from the positional values of the nodes (directions of the graph edges)
 
@@ -217,9 +222,12 @@ class CustomGNN(MessagePassing):
 # x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
 # xx, yy = np.meshgrid(x, y)
 # x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# x_in = torch.tensor(x_in, dtype=torch.float32)
 # u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
 # u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
 # u_in = u_in.reshape(u_in.shape[0], -1, 1)
+# u_in = torch.tensor(u_in, dtype=torch.float32)
+
 # graph_data = get_graph(u_in, x_in, r=0.05)#Obtains the node features (num_nodes, num_features), the edge indices that fall within a raius of r next to the node in the form of the adjacency matrix (num_edges, 2) and 
 #                                          # the edge attributes which is of shape (num_edges, 4) 4 - coming from the positional values of the nodes (directions of the graph edges)
 
