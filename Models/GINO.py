@@ -76,34 +76,34 @@ class GINO(nn.Module):
         return u_dec
 
 
-#Example Usage
-#Input Grid
-x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
-xx, yy = np.meshgrid(x, y)
-x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
-x_in = torch.tensor(x_in, dtype=torch.float32)
-x_in = x_in.unsqueeze(0)
-u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
-u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
-u_in = u_in.reshape(u_in.shape[0], -1, 1)
-u_in = torch.tensor(u_in, dtype=torch.float32)
+# #Example Usage
+# #Input Grid
+# x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
+# xx, yy = np.meshgrid(x, y)
+# x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# x_in = torch.tensor(x_in, dtype=torch.float32)
+# x_in = x_in.unsqueeze(0)
+# u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
+# u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
+# u_in = u_in.reshape(u_in.shape[0], -1, 1)
+# u_in = torch.tensor(u_in, dtype=torch.float32)
 
-#FNO Grid discretisation. 
-x, y = np.linspace(0, 1, 16), np.linspace(0, 1, 16)#x-y discretisation
-xx, yy = np.meshgrid(x, y)
-x_fno = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
-x_fno = torch.tensor(x_fno, dtype=torch.float32)
-x_fno = x_fno.unsqueeze(0)
+# #FNO Grid discretisation. 
+# x, y = np.linspace(0, 1, 16), np.linspace(0, 1, 16)#x-y discretisation
+# xx, yy = np.meshgrid(x, y)
+# x_fno = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# x_fno = torch.tensor(x_fno, dtype=torch.float32)
+# x_fno = x_fno.unsqueeze(0)
 
-#Output Grid
-x, y = np.linspace(0, 1, 64), np.linspace(0, 1, 64)#x-y discretisation
-xx, yy = np.meshgrid(x, y)
-x_out = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
-x_out = torch.tensor(x_out, dtype=torch.float32)
-x_out = x_out.unsqueeze(0)
+# #Output Grid
+# x, y = np.linspace(0, 1, 64), np.linspace(0, 1, 64)#x-y discretisation
+# xx, yy = np.meshgrid(x, y)
+# x_out = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# x_out = torch.tensor(x_out, dtype=torch.float32)
+# x_out = x_out.unsqueeze(0)
 
-model = GINO(in_channel=1, gno_width=32, out_channel=1, radius=0.05, fno_disc=[16,16], fno_width=32, modes=4)
-out = model(u_in, x_in, x_out)
-print(f'Input shape: {u_in.shape, x_in.shape, x_out.shape}, Output shape: {out.shape}')
+# model = GINO(in_channel=1, gno_width=32, out_channel=1, radius=0.05, fno_disc=[16,16], fno_width=32, modes=4)
+# out = model(u_in, x_in, x_out)
+# print(f'Input shape: {u_in.shape, x_in.shape, x_out.shape}, Output shape: {out.shape}')
 
 # %% 
