@@ -1,8 +1,55 @@
+# %% 
+import numpy as np 
 import torch 
 import torch.nn as nn 
 from torch_geometric.nn import  MessagePassing, GCNConv, NNConv
 from torch_geometric.utils import add_self_loops
 import torch.nn.functional as F
+from torch_geometric.data import Data
+
+
+def get_graph(u_in: np.array ,x_in: np.array, r: float) -> Data:
+    """
+    Create a graph from input node positions and features.
+
+    Args:
+    x_in (torch.Tensor): Input tensor of shape (num_nodes, dim) representing node positions.
+    u_in (torch.Tensor): Input tensor of shape (num_nodes, features) representing node features.
+    r (float): Maximum distance for edge creation between nodes. - Radius of the Sphere from GNO
+
+    Returns:
+    Data: A PyTorch Geometric Data object containing:
+        - x (torch.Tensor): Node features of shape (num_nodes, 1)
+        - edge_index (torch.Tensor): Graph connectivity in COO format of shape (2, num_edges)
+        - edge_attr (torch.Tensor): Edge features of shape (num_edges, 2 * dim)
+
+    Notes:
+    - The function creates edges between nodes that are within 'r' distance of each other.
+    - Edge attributes are the concatenated positions of the connected nodes.
+    """
+    # Reshape node features to (num_nodes, 1)
+    node_features = torch.from_numpy(u_in).float()
+
+    # Ensure x_in is a 2D tensor
+    x_in = torch.tensor(x_in).squeeze()
+    if x_in.dim() == 1:
+        x_in = x_in.unsqueeze(1)
+
+    # Compute pairwise distances between nodes
+    pwd = torch.cdist(x_in, x_in).squeeze()
+
+    # Create edges for nodes within r distance
+    edge_index = torch.stack(torch.where(pwd <= r))
+    edge_index = torch.tensor(edge_index, dtype=torch.long, device=x_in.device)
+
+    # Compute edge attributes (concatenated positions of connected nodes)
+    edge_attr = torch.cat([x_in[edge_index[0]], x_in[edge_index[1]]], dim=-1)
+    edge_attr = torch.tensor(edge_attr, dtype=torch.float)
+
+    # Create and return the Data object
+    return Data(x=node_features, edge_index=edge_index, edge_attr=edge_attr)
+
+
 
 #Building Block MLP. 
 class MLP(torch.nn.Module):
@@ -55,7 +102,22 @@ class GCN(nn.Module):
                 x = F.relu(x)
         return x
  
-  
+# #Example Usage
+# x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
+# xx, yy = np.meshgrid(x, y)
+# x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
+# u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
+# u_in = u_in.reshape(u_in.shape[0], -1, 1)
+# graph_data = get_graph(u_in, x_in, r=0.05)#Obtains the node features (num_nodes, num_features), the edge indices that fall within a raius of r next to the node in the form of the adjacency matrix (num_edges, 2) and 
+#                                          # the edge attributes which is of shape (num_edges, 4) 4 - coming from the positional values of the nodes (directions of the graph edges)
+
+# model = GCN(in_channels=1, hidden_channels=64, num_layers=2, out_channels=1)
+# out = model(graph_data.x, graph_data.edge_index)
+# print(f'Input shape: {graph_data.x.shape, graph_data.edge_index.shape}, Output shape: {out.shape}')
+
+
+# %% 
 #NNconv with edge attributes as well. 
 class NNConvNet(nn.Module):
     def __init__(self, in_channels, hidden_channels, out_channels, num_layers, edge_dim):
@@ -99,6 +161,22 @@ class NNConvNet(nn.Module):
         return x
     
 
+ 
+# #Example Usage
+# x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
+# xx, yy = np.meshgrid(x, y)
+# x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
+# u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
+# u_in = u_in.reshape(u_in.shape[0], -1, 1)
+# graph_data = get_graph(u_in, x_in, r=0.05)#Obtains the node features (num_nodes, num_features), the edge indices that fall within a raius of r next to the node in the form of the adjacency matrix (num_edges, 2) and 
+#                                          # the edge attributes which is of shape (num_edges, 4) 4 - coming from the positional values of the nodes (directions of the graph edges)
+
+# model = NNConvNet(in_channels=1, hidden_channels=64, num_layers=2, out_channels=1, edge_dim=4)
+# out = model(graph_data.x, graph_data.edge_index, graph_data.edge_attr)
+# print(f'Input shape: {graph_data.x.shape, graph_data.edge_index.shape, graph_data.edge_attr.shape}, Output shape: {out.shape}')
+
+# %%
 class CustomGNN(MessagePassing):
     def __init__(self, in_channels, hidden_channels, out_channels, num_layers):
         super(CustomGNN, self).__init__(aggr='add')
@@ -134,7 +212,22 @@ class CustomGNN(MessagePassing):
     def update(self, aggr_out):
         return aggr_out
 
+ 
+# #Example Usage
+# x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
+# xx, yy = np.meshgrid(x, y)
+# x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
+# u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
+# u_in = u_in.reshape(u_in.shape[0], -1, 1)
+# graph_data = get_graph(u_in, x_in, r=0.05)#Obtains the node features (num_nodes, num_features), the edge indices that fall within a raius of r next to the node in the form of the adjacency matrix (num_edges, 2) and 
+#                                          # the edge attributes which is of shape (num_edges, 4) 4 - coming from the positional values of the nodes (directions of the graph edges)
 
+# model = CustomGNN(in_channels=1, hidden_channels=64, num_layers=2, out_channels=1)
+# out = model(graph_data.x, graph_data.edge_index)
+# print(f'Input shape: {graph_data.x.shape, graph_data.edge_index.shape}, Output shape: {out.shape}')
+
+# %% 
 #GNO - Zongyi's code
 class GNO(nn.Module):
     def __init__(self, in_channel=3, width=32, mid_width=64, out_channel=3, r=0.1):
@@ -218,3 +311,28 @@ class GNO(nn.Module):
         u_out = self.to_output(u)
         return u_out
 
+ 
+# #Example Usage
+# #Input Grid
+# x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
+# xx, yy = np.meshgrid(x, y)
+# x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# x_in = torch.tensor(x_in, dtype=torch.float32)
+# x_in = x_in.unsqueeze(0)
+# u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
+# u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
+# u_in = u_in.reshape(u_in.shape[0], -1, 1)
+# u_in = torch.tensor(u_in, dtype=torch.float32)
+
+# #Output Grid
+# x, y = np.linspace(0, 1, 64), np.linspace(0, 1, 64)#x-y discretisation
+# xx, yy = np.meshgrid(x, y)
+# x_out = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+# x_out = torch.tensor(x_out, dtype=torch.float32)
+# x_out = x_out.unsqueeze(0)
+
+# model = GNO(in_channel=1, width=32, mid_width=64, out_channel=1, r=0.1)
+# out = model(u_in, x_in, x_out)
+# print(f'Input shape: {u_in.shape, x_in.shape, x_out.shape}, Output shape: {out.shape}')
+
+# %%
