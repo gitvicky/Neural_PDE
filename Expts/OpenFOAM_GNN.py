@@ -9,7 +9,7 @@ Turbulent Cylinder Wake from OpenFOAM modelled using a GNN
 configuration = {"Case": 'Turbulent Wake',
                  "Field": 'u, v, p',
                  "Model": 'GCN',
-                 "Epochs": 1,
+                 "Epochs": 0,
                  "Batch Size": 5,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -28,16 +28,16 @@ configuration = {"Case": 'Turbulent Wake',
                  }
 
 import os
-from simvue import Run
-run = Run(mode='disabled')
-run.init(folder="/Neural_PDE", tags=['NPDE', configuration['Model'], 'AR', 'Wake', 'Turbulent'], metadata=configuration)
+# from simvue import Run
+# run = Run(mode='disabled')
+# run.init(folder="/Neural_PDE", tags=['NPDE', configuration['Model'], 'AR', 'Wake', 'Turbulent'], metadata=configuration)
 
-#Saving the current run file and the git hash of the repo
-run.save_file(os.path.abspath(__file__), 'code')
-import git
-repo = git.Repo(search_parent_directories=True)
-sha = repo.head.object.hexsha
-run.update_metadata({'Git Hash': sha})
+# #Saving the current run file and the git hash of the repo
+# run.save_file(os.path.abspath(__file__), 'code')
+# import git
+# repo = git.Repo(search_parent_directories=True)
+# sha = repo.head.object.hexsha
+# run.update_metadata({'Git Hash': sha})
 
 # %% #Importing the necessary packages
 import sys
@@ -69,7 +69,9 @@ from Neural_PDE.Utils.training_utils import *
 # %% 
 #Loading the airfoil data
 import os
-data_loc = '/home/ir-gopa2/rds/rds-ukaea-ap001/ir-gopa2/Code/simvue_testing/OpenFOAM/turbulent/' + 'airfoil_turbulent_gnns.npz'
+data_loc = '/home/ir-gopa2/rds/rds-ukaea-ap001/ir-gopa2/Code/simvue_testing/OpenFOAM/turbulent/' 
+data_loc = '/Users/Vicky/GNN4PDE/Data/'
+data_loc = data_loc + 'airfoil_turbulent_gnns.npz'
 data = np.load(data_loc)
 
 x, y, t = data['x'], data['y'], data['t']
@@ -80,7 +82,7 @@ xx = np.stack((x,y)).T
 uu = torch.tensor(uu, dtype=torch.float32)
 xx = torch.tensor(xx, dtype=torch.float32)
 
-ntrain = 45
+ntrain = 10
 ntest = 5 
 
 #Normalising the dataset with the preferred normalisation. 
@@ -119,10 +121,13 @@ epochs = configuration['Epochs']
 for ep in tqdm(range(epochs)):
     model.train()
     loss_epoch = 0
-    for ii in range(len(t)-1):
+    for ii in tqdm(range(len(t)-2)):
         graph_data = get_graph(train_uu[:, ii], xx_norm, r=0.1)
         graph_data.y = train_uu[:, ii+1]
-        out = model(graph_data.x.to(device), graph_data.edge_index.to(device))
+        if configuration['Model'] == 'GCN':
+            out = model(graph_data.x.to(device), graph_data.edge_index.to(device))
+        if configuration['Model'] == 'NNConv':
+            out = model(graph_data.x.to(device), graph_data.edge_index.to(device), graph_data.edge_attr.to(device))
         loss = loss_func(out, graph_data.y.to(device))
         loss.backward()
         loss_epoch += loss.item()
@@ -130,27 +135,30 @@ for ep in tqdm(range(epochs)):
     scheduler.step()
     print(f'Epoch {ep+1}/{epochs}, Loss: {loss_epoch/ntrain:.6f}')
 
-
 # %% 
 #Evaluation. 
 with torch.no_grad():
     model.eval()
     loss_eval = 0
     pred_uu = []
-    for ii in range(len(t)-1):
-        graph_data = get_graph(test_uu[:, ii])
+    for ii in tqdm(range(len(t)-2)):
+        graph_data = get_graph(test_uu[:, ii], xx_norm, r=0.1)
         graph_data.y = test_uu[:, ii+1]
-        out = model(graph_data.x.to(device), graph_data.edge_index.to(device))
+        if configuration['Model'] == 'GCN':
+            out = model(graph_data.x.to(device), graph_data.edge_index.to(device))
+        if configuration['Model'] == 'NNConv':
+            out = model(graph_data.x.to(device), graph_data.edge_index.to(device), graph_data.edge_attr.to(device))        
         pred_uu.append(out)
         loss = loss_func(out, graph_data.y.to(device))
         loss_eval += loss.item()
     print(f'Eval Loss: {loss_eval/ntest:.6f}')
-import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib.tri import Triangulation
 
+pred_uu = [t.unsqueeze(0) for t in pred_uu]
+pred_uu = torch.cat(pred_uu, dim=1)
 # %% 
 #Plotting
+
+from matplotlib.tri import Triangulation
 def plot_unstructured(x, y, values, title="Field"):
     """
     Create a color plot of values on an unstructured grid.
@@ -195,8 +203,10 @@ def plot_unstructured(x, y, values, title="Field"):
 
 # Create the plot
 sim_idx = 0 
-t_idx = 0 
-var = 0 
-fig, ax = plot_unstructured(x, y, test_uu[sim_idx, t_idx, : ,var])
+t_idx = 10
+var = 0
+fig, ax = plot_unstructured(x, y, test_uu[sim_idx, t_idx+1, : ,var])
 fig, ax = plot_unstructured(x, y, pred_uu[sim_idx, t_idx, : ,var])
 plt.show()
+# plt.savefig('comparison.png')
+# %%
