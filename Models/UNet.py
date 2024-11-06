@@ -132,10 +132,12 @@ class UNet2d(nn.Module):
         super(UNet2d, self).__init__()
 
         features = init_features
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.num_vars = num_vars
         self.dropout = dropout
 
-        self.encoder1 = UNet2d._block(in_channels, features, name="enc1", dropout=dropout)
+        self.encoder1 = UNet2d._block(in_channels*num_vars, features, name="enc1", dropout=dropout)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.encoder2 = UNet2d._block(features, features * 2, name="enc2")
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -144,25 +146,24 @@ class UNet2d(nn.Module):
         self.bottleneck = UNet2d._block(features * 2, features * 4, name="bottleneck")
 
         self.upconv2 = nn.ConvTranspose2d(
-            features * 4, features * 2, kernel_size=2, stride=2
+            features * 4, features * 2, kernel_size=2, stride=2, padding=0
         )
         self.decoder2 = UNet2d._block((features * 2) * 2, features * 2, name="dec2")
         self.upconv1 = nn.ConvTranspose2d(
-            features * 2, features, kernel_size=3, stride=2
+            features * 2, features, kernel_size=2, stride=2, padding=0
         )
         self.decoder1 = UNet2d._block(features * 2, features, name="dec1")
 
         self.conv = nn.Conv2d(
-            in_channels=features, out_channels=out_channels, kernel_size=1
+            in_channels=features, out_channels=out_channels*num_vars, kernel_size=1
         )
 
     def forward(self, x):
         x = x.permute(0, 1, 4, 2, 3)
-        x = x.view(int(x.shape[0]*self.num_vars), x.shape[2], x.shape[3], x.shape[4])
+        x = x.view(x.shape[0], self.in_channels * self.num_vars, x.shape[3], x.shape[4])
 
         enc1 = self.encoder1(x)
         enc2 = self.encoder2(self.pool1(enc1))
-
         bottleneck = self.bottleneck(self.pool2(enc2))
 
         dec2 = self.upconv2(bottleneck)
@@ -173,7 +174,7 @@ class UNet2d(nn.Module):
         dec1 = self.decoder1(dec1)
         out = self.conv(dec1)
 
-        out = out.view(out.shape[0], self.num_vars, out.shape[1], out.shape[2], out.shape[3])
+        out = out.view(out.shape[0], self.num_vars, self.out_channels, out.shape[2], out.shape[3])
         out = out.permute(0, 1, 3, 4, 2)
         return out
     
@@ -203,6 +204,7 @@ class UNet2d(nn.Module):
         return c
 # %%
 # #Example Usage
-# model = UNet2d(in_channels=20, out_channels=5, init_features=32, num_vars=1)
-# ins = torch.randn(100,1,64,64,20) #BS, num_vars, Nx, Ny, T_in
-# outs = model(ins)
+model = UNet2d(in_channels=5, out_channels=10, init_features=32, num_vars=1)
+ins = torch.randn(20,1,100,100,5) #BS, num_vars, Nx, Ny, T_in
+outs = model(ins)
+# %% 

@@ -12,106 +12,211 @@ import torch.functional as F
 
 import operator
 from functools import reduce
-from functools import partial
-from collections import OrderedDict
 
-from pytorch_wavelets import DWT, IDWT # (or import DWT, IDWT)
-
-class SpectralConv2d(nn.Module):
-    def __init__(self, in_channels, out_channels, num_vars, modes1, modes2):
-        super(SpectralConv2d, self).__init__()
-
-        """
-        2D Fourier layer. It does FFT, linear transform, and Inverse FFT.    
-        """
-
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.modes1 = modes1  # Number of Fourier modes to multiply, at most floor(N/2) + 1
-        self.modes2 = modes2
-        self.num_vars = num_vars 
-
-        self.scale = (1 / (in_channels))
-        self.weights1 = nn.Parameter(
-            self.scale * torch.rand(in_channels, out_channels, num_vars, self.modes1, self.modes2, dtype=torch.cfloat))
-        self.weights2 = nn.Parameter(
-            self.scale * torch.rand(in_channels, out_channels, num_vars, self.modes1, self.modes2, dtype=torch.cfloat))
-
-    # Complex multiplication
-    def compl_mul2d(self, input, weights):
-        # (batch, in_channel, x,y ), (in_channel, out_channel, x,y) -> (batch, out_channel, x,y)
-        return torch.einsum("bivxy,iovxy->bovxy", input, weights)
-
-    def forward(self, x):
-        batchsize = x.shape[0]
-        # Compute Fourier coeffcients up to factor of e^(- something constant)
-        x_ft = torch.fft.rfft2(x)
-        print(x_ft.shape)
-
-        # Multiply relevant Fourier modes
-        out_ft = torch.zeros(batchsize, self.out_channels, self.num_vars, x.size(-2), x.size(-1) // 2 + 1,
-                             dtype=torch.cfloat, device=x.device)
-        out_ft[:, :, :, :self.modes1, :self.modes2] = \
-            self.compl_mul2d(x_ft[:, :, :, :self.modes1, :self.modes2], self.weights1)
-        out_ft[:, :, :, -self.modes1:, :self.modes2] = \
-            self.compl_mul2d(x_ft[:, :, :, -self.modes1:, :self.modes2], self.weights2)
-
-        # Return to physical space
-        x = torch.fft.irfft2(out_ft, s=(x.size(-2), x.size(-1)))
-        return x
+try:
+    import ptwt, pywt
+    from ptwt.conv_transform_3 import wavedec3, waverec3
+    from pytorch_wavelets import DWT1D, IDWT1D
+    from pytorch_wavelets import DTCWTForward, DTCWTInverse
+    from pytorch_wavelets import DWT, IDWT 
+except ImportError:
+    print('Wavelet convolution requires <Pytorch Wavelets>, <PyWavelets>, <Pytorch Wavelet Toolbox> \n \
+                    For Pytorch Wavelet Toolbox: $ pip install ptwt \n \
+                    For PyWavelets: $ conda install pywavelets \n \
+                    For Pytorch Wavelets: $ git clone https://github.com/fbcotter/pytorch_wavelets \n \
+                                          $ cd pytorch_wavelets \n \
+                                          $ pip install .')
 
 
+""" Def: 2d Wavelet convolutional layer (discrete) """
 class WaveConv2d(nn.Module):
-    def __init__(self, in_channels, out_channels, num_vars, modes1, modes2):
-        super(SpectralConv2d, self).__init__()
+    def __init__(self, in_channels, out_channels, level, size, wavelet, mode='symmetric'):
+        super(WaveConv2d, self).__init__()
 
         """
-        2D Fourier layer. It does FFT, linear transform, and Inverse FFT.    
+        2D Wavelet layer. It does DWT, linear transform, and Inverse dWT. 
+        
+        Input parameters: 
+        -----------------
+        in_channels  : scalar, input kernel dimension
+        out_channels : scalar, output kernel dimension
+        level        : scalar, levels of wavelet decomposition
+        size         : scalar, length of input 1D signal
+        wavelet      : string, wavelet filters
+        mode         : string, padding style for wavelet decomposition
+        
+        It initializes the kernel parameters: 
+        -------------------------------------
+        self.weights1 : tensor, shape-[in_channels * out_channels * x * y]
+                        kernel weights for Approximate wavelet coefficients
+        self.weights2 : tensor, shape-[in_channels * out_channels * x * y]
+                        kernel weights for Horizontal-Detailed wavelet coefficients
+        self.weights3 : tensor, shape-[in_channels * out_channels * x * y]
+                        kernel weights for Vertical-Detailed wavelet coefficients
+        self.weights4 : tensor, shape-[in_channels * out_channels * x * y]
+                        kernel weights for Diagonal-Detailed wavelet coefficients
         """
 
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.modes1 = modes1  # Number of Fourier modes to multiply, at most floor(N/2) + 1
-        self.modes2 = modes2
-        self.num_vars = num_vars 
+        self.level = level
+        if isinstance(size, list):
+            if len(size) != 2:
+                raise Exception('size: WaveConv2dCwt accepts the size of 2D signal in list with 2 elements')
+            else:
+                self.size = size
+        else:
+            raise Exception('size: WaveConv2dCwt accepts size of 2D signal is list')
+        self.wavelet = wavelet       
+        self.mode = mode
+        dummy_data = torch.randn( 1,1,*self.size )        
+        dwt_ = DWT(J=self.level, mode=self.mode, wave=self.wavelet)
+        mode_data, mode_coef = dwt_(dummy_data)
+        self.modes1 = mode_data.shape[-2]
+        self.modes2 = mode_data.shape[-1]
+        
+        # Parameter initilization
+        self.scale = (1 / (in_channels * out_channels))
+        self.weights1 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2))
+        self.weights2 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2))
+        self.weights3 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2))
+        self.weights4 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, self.modes2))
 
-        self.scale = (1 / (in_channels))
-        self.weights1 = nn.Parameter(
-            self.scale * torch.rand(in_channels, out_channels, num_vars, self.modes1, self.modes2, dtype=torch.cfloat))
-        self.weights2 = nn.Parameter(
-            self.scale * torch.rand(in_channels, out_channels, num_vars, self.modes1, self.modes2, dtype=torch.cfloat))
+    # Convolution
+    def mul2d(self, input, weights):
+        """
+        Performs element-wise multiplication
 
-    # Complex multiplication
-    def compl_mul2d(self, input, weights):
-        # (batch, in_channel, x,y ), (in_channel, out_channel, x,y) -> (batch, out_channel, x,y)
-        return torch.einsum("bivxy,iovxy->bovxy", input, weights)
+        Input Parameters
+        ----------------
+        input   : tensor, shape-(batch * in_channel * x * y )
+                  2D wavelet coefficients of input signal
+        weights : tensor, shape-(in_channel * out_channel * x * y)
+                  kernel weights of corresponding wavelet coefficients
+
+        Returns
+        -------
+        convolved signal : tensor, shape-(batch * out_channel * x * y)
+        """
+        return torch.einsum("bixy,ioxy->boxy", input, weights)
 
     def forward(self, x):
-        batchsize = x.shape[0]
-        # Compute Fourier coeffcients up to factor of e^(- something constant)
-        x_ft = torch.fft.rfft2(x)
-        print(x_ft.shape)
+        """
+        Input parameters: 
+        -----------------
+        x : tensor, shape-[Batch * Channel * x * y]
+        Output parameters: 
+        ------------------
+        x : tensor, shape-[Batch * Channel * x * y]
+        """
+        if x.shape[-1] > self.size[-1]:
+            factor = int(np.log2(x.shape[-1] // self.size[-1]))
+            
+            # Compute single tree Discrete Wavelet coefficients using some wavelet
+            dwt = DWT(J=self.level+factor, mode=self.mode, wave=self.wavelet).to(x.device)
+            x_ft, x_coeff = dwt(x)
+            
+        elif x.shape[-1] < self.size[-1]:
+            factor = int(np.log2(self.size[-1] // x.shape[-1]))
+            
+            # Compute single tree Discrete Wavelet coefficients using some wavelet
+            dwt = DWT(J=self.level-factor, mode=self.mode, wave=self.wavelet).to(x.device)
+            x_ft, x_coeff = dwt(x)
+        
+        else:
+            # Compute single tree Discrete Wavelet coefficients using some wavelet
+            dwt = DWT(J=self.level, mode=self.mode, wave=self.wavelet).to(x.device)
+            x_ft, x_coeff = dwt(x)
 
-        # Multiply relevant Fourier modes
-        out_ft = torch.zeros(batchsize, self.out_channels, self.num_vars, x.size(-2), x.size(-1) // 2 + 1,
-                             dtype=torch.cfloat, device=x.device)
-        out_ft[:, :, :, :self.modes1, :self.modes2] = \
-            self.compl_mul2d(x_ft[:, :, :, :self.modes1, :self.modes2], self.weights1)
-        out_ft[:, :, :, -self.modes1:, :self.modes2] = \
-            self.compl_mul2d(x_ft[:, :, :, -self.modes1:, :self.modes2], self.weights2)
-
-        # Return to physical space
-        x = torch.fft.irfft2(out_ft, s=(x.size(-2), x.size(-1)))
+        # Instantiate higher level coefficients as zeros
+        out_ft = torch.zeros_like(x_ft, device= x.device)
+        out_coeff = [torch.zeros_like(coeffs, device= x.device) for coeffs in x_coeff]
+        
+        # Multiply the final approximate Wavelet modes
+        out_ft = self.mul2d(x_ft, self.weights1)
+        # Multiply the final detailed wavelet coefficients
+        out_coeff[-1][:,:,0,:,:] = self.mul2d(x_coeff[-1][:,:,0,:,:].clone(), self.weights2)
+        out_coeff[-1][:,:,1,:,:] = self.mul2d(x_coeff[-1][:,:,1,:,:].clone(), self.weights3)
+        out_coeff[-1][:,:,2,:,:] = self.mul2d(x_coeff[-1][:,:,2,:,:].clone(), self.weights4)
+        
+        # Return to physical space        
+        idwt = IDWT(mode=self.mode, wave=self.wavelet).to(x.device)
+        x = idwt((out_ft, out_coeff))
         return x
+    
 
-class MLP(nn.Module):
-    def __init__(self, in_channels, out_channels, mid_channels):
-        super(MLP, self).__init__()
-        self.mlp1 = nn.Conv3d(in_channels, mid_channels, 1)
-        self.mlp2 = nn.Conv3d(mid_channels, out_channels, 1)
+class WNO2d(nn.Module):
+    def __init__(self, width, level, layers, size, wavelet, in_channel, grid_range, padding=0):
+        super(WNO2d, self).__init__()
+
+        """
+        The WNO network. It contains l-layers of the Wavelet integral layer.
+        1. Lift the input using v(x) = self.fc0 .
+        2. l-layers of the integral operators v(j+1)(x,y) = g(K.v + W.v)(x,y).
+            --> W is defined by self.w; K is defined by self.conv.
+        3. Project the output of last layer using self.fc1 and self.fc2.
+        
+        Input : (T_in+1)-channel tensor, solution at t0-t_T and location (u(x,y,t0),...u(x,y,t_T), x,y)
+              : shape: (batchsize * x=width * x=height * c=T_in+1)
+        Output: Solution of a later timestep (u(x, T_in+1))
+              : shape: (batchsize * x=width * x=height * c=1)
+              
+        Input parameters:
+        -----------------
+        width : scalar, lifting dimension of input
+        level : scalar, number of wavelet decomposition
+        layers: scalar, number of wavelet kernel integral blocks
+        size  : list with 2 elements (for 2D), image size
+        wavelet: string, wavelet filter
+        in_channel: scalar, channels in input including grid
+        grid_range: list with 2 elements (for 2D), right supports of 2D domain
+        padding   : scalar, size of zero padding
+        """
+
+        self.level = level
+        self.width = width
+        self.layers = layers
+        self.size = size
+        self.wavelet = wavelet
+        self.in_channel = in_channel
+        self.grid_range = grid_range 
+        self.padding = padding
+        
+        self.conv = nn.ModuleList()
+        self.w = nn.ModuleList()
+        
+        self.fc0 = nn.Linear(self.in_channel, self.width) # input channel is 3: (a(x, y), x, y)
+        for i in range( self.layers ):
+            self.conv.append( WaveConv2d(self.width, self.width, self.level, self.size, self.wavelet) )
+            self.w.append( nn.Conv2d(self.width, self.width, 1) )
+        self.fc1 = nn.Linear(self.width, 128)
+        self.fc2 = nn.Linear(128, 1)
 
     def forward(self, x):
-        x = self.mlp1(x)
-        x = F.gelu(x)
-        x = self.mlp2(x)
+        grid = self.get_grid(x.shape, x.device)
+        x = torch.cat((x, grid), dim=-1)    
+        x = self.fc0(x)                      # Shape: Batch * x * y * Channel
+        x = x.permute(0, 3, 1, 2)            # Shape: Batch * Channel * x * y
+        if self.padding != 0:
+            x = F.pad(x, [0,self.padding, 0,self.padding]) 
+        
+        for index, (convl, wl) in enumerate( zip(self.conv, self.w) ):
+            x = convl(x) + wl(x) 
+            if index != self.layers - 1:     # Final layer has no activation    
+                x = F.mish(x)                # Shape: Batch * Channel * x * y
+                
+        if self.padding != 0:
+            x = x[..., :-self.padding, :-self.padding]     
+        x = x.permute(0, 2, 3, 1)            # Shape: Batch * x * y * Channel
+        x = F.gelu( self.fc1(x) )            # Shape: Batch * x * y * Channel
+        x = self.fc2(x)                      # Shape: Batch * x * y * Channel
         return x
+    
+    def get_grid(self, shape, device):
+        # The grid of the solution
+        batchsize, size_x, size_y = shape[0], shape[1], shape[2]
+        gridx = torch.tensor(np.linspace(0, self.grid_range[0], size_x), dtype=torch.float)
+        gridx = gridx.reshape(1, size_x, 1, 1).repeat([batchsize, 1, size_y, 1])
+        gridy = torch.tensor(np.linspace(0, self.grid_range[1], size_y), dtype=torch.float)
+        gridy = gridy.reshape(1, 1, size_y, 1).repeat([batchsize, size_x, 1, 1])
+        return torch.cat((gridx, gridy), dim=-1).to(device)
