@@ -9,10 +9,10 @@ Turbulent Cylinder Wake from OpenFOAM modelled using a GNN
 configuration = {"Case": 'Turbulent Wake',
                  "Field": 'u, v, p',
                  "Model": 'GCN',
-                 "Epochs": 0,
-                 "Batch Size": 5,
+                 "Epochs": 500,
+                 "Batch Size": 10,
                  "Optimizer": 'Adam',
-                 "Learning Rate": 0.005,
+                 "Learning Rate": 0.001,
                  "Scheduler Step": 100,
                  "Scheduler Gamma": 0.5,
                  "Activation": 'ReLU',
@@ -21,7 +21,7 @@ configuration = {"Case": 'Turbulent Wake',
                  "T_in": 1,    
                  "T_out": 20,
                  "Step": 1,
-                 "Width": 64, 
+                 "Width": 32, 
                  "Variables":3, 
                  "Loss Function": 'MSE',
                  "UQ": 'None', #None, Dropout
@@ -29,7 +29,7 @@ configuration = {"Case": 'Turbulent Wake',
 
 import os
 from simvue import Run
-run = Run(mode='disabled')
+run = Run(mode='online')
 run.init(folder="/Neural_PDE", tags=['NPDE', configuration['Model'], 'AR', 'Wake', 'Turbulent'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
@@ -74,7 +74,7 @@ from Neural_PDE.Utils.training_utils import *
 #Loading the airfoil data
 import os
 data_loc = '/home/ir-gopa2/rds/rds-ukaea-ap001/ir-gopa2/Code/simvue_testing/OpenFOAM/turbulent/' 
-data_loc = '/Users/Vicky/GNN4PDE/Data/'
+# data_loc = '/Users/Vicky/GNN4PDE/Data/'
 data_loc = data_loc + 'airfoil_turbulent_gnns.npz'
 data = np.load(data_loc)
 
@@ -86,8 +86,8 @@ xx = np.stack((x,y)).T
 uu = torch.tensor(uu, dtype=torch.float32)
 xx = torch.tensor(xx, dtype=torch.float32)
 
-ntrain = 10
-ntest = 5 
+ntrain = 40
+ntest = 10
 
 #Normalising the dataset with the preferred normalisation. 
 norm_strategy = configuration['Normalisation Strategy']
@@ -108,15 +108,21 @@ xx_norm = loc_normalizer.encode(xx)
 train_uu = uu_norm[:ntrain]
 test_uu = uu_norm[-ntest:]
 
+train_loader = torch.utils.data.DataLoader(torch.utils.data.TensorDataset(train_uu), batch_size=configuration['Batch Size'], shuffle=True)
+
 # %%
 #Model Setup
 
 if configuration['Model'] == 'GCN':
-    model = GCN(in_channels=3, hidden_channels=64, out_channels=3, num_layers=6).to(device)
+    model = GCN(in_channels=3, hidden_channels=configuration['Width'], out_channels=3, num_layers=4).to(device)
 if configuration['Model'] == 'NNConv':
-    model = NNConvNet(in_channels=3, hidden_channels=64, out_channels=3, num_layers=2, edge_dim=4).to(device)
+    model = NNConvNet(in_channels=3, hidden_channels=configuration['Width'], out_channels=3, num_layers=2, edge_dim=4).to(device)
 
-run.update_metadata({'Number of Params': int(model.count_params())})
+# run.update_metadata({'Number of Params': int(model.count_params())})
+
+# #Loading the trained model
+# run_name = 'crispy-taxi'
+# model.load_state_dict(torch.load(model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run_name + '.pth', map_location='cpu'))
 
 optimizer = torch.optim.Adam(model.parameters(), lr=configuration['Learning Rate'], weight_decay=1e-4)
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=configuration['Scheduler Step'], gamma=configuration['Scheduler Gamma'])
@@ -128,27 +134,33 @@ epochs = configuration['Epochs']
 for ep in tqdm(range(epochs)):
     model.train()
     loss_epoch = 0
-    for ii in tqdm(range(len(t)-2)):
-        graph_data = get_graph(train_uu[:, ii], xx_norm, r=0.1)
-        graph_data.y = train_uu[:, ii+1]
-        if configuration['Model'] == 'GCN':
-            out = model(graph_data.x.to(device), graph_data.edge_index.to(device))
-        if configuration['Model'] == 'NNConv':
-            out = model(graph_data.x.to(device), graph_data.edge_index.to(device), graph_data.edge_attr.to(device))
-        loss = loss_func(out, graph_data.y.to(device))
-        loss.backward()
-        loss_epoch += loss.item()
-        optimizer.step()
+    for batch_uu in train_loader:
+        batch_uu = batch_uu[0]
+        for ii in tqdm(range(len(t)-2)):
+            graph_data = get_graph(batch_uu[:, ii], xx_norm, r=0.1)
+            graph_data.y = batch_uu[:, ii+1]
+            if configuration['Model'] == 'GCN':
+                out = model(graph_data.x.to(device), graph_data.edge_index.to(device))
+            if configuration['Model'] == 'NNConv':
+                out = model(graph_data.x.to(device), graph_data.edge_index.to(device), graph_data.edge_attr.to(device))
+            loss = loss_func(out, graph_data.y.to(device))
+            loss.backward()
+            loss_epoch += loss.item()
+            optimizer.step()
     scheduler.step()
     print(f'Epoch {ep+1}/{epochs}, Loss: {loss_epoch/ntrain:.6f}')
     run.log_metrics({'Train Loss': loss_epoch/ntrain})
+    
+    if ep%100 ==0: 
+        saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '.pth'
+        torch.save( model.state_dict(), saved_model)
 
 train_time = default_timer() - start_time
 
 #Saving the Model
 saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '.pth'
 torch.save( model.state_dict(), saved_model)
-run.save(saved_model, 'output')
+run.save_file(saved_model, 'output')
 
 # %% 
 #Evaluation. 
@@ -168,8 +180,10 @@ with torch.no_grad():
         loss_eval += loss.item()
     print(f'Eval Loss: {loss_eval/ntest:.6f}')
 
-pred_uu = [t.unsqueeze(0) for t in pred_uu]
+# %%
+pred_uu = [t.unsqueeze(1) for t in pred_uu]
 pred_uu = torch.cat(pred_uu, dim=1)
+pred_uu = pred_uu.detach().cpu()
 
 mse = (pred_uu - test_uu[:, 1:]).pow(2).mean()
 print('(MSE) Testing Error: %.3e' % (mse))
@@ -222,26 +236,28 @@ def plot_unstructured(x, y, values, title="Field"):
     
     return fig, ax
 
-# Create the plot
+# Plotting 
 sim_idx = 0 
 t_idx = 10
+
+
 var = 0 #u
 fig, ax = plot_unstructured(x, y, test_uu[sim_idx, t_idx+1, : ,var], title='Ux - Actual')
 fig, ax = plot_unstructured(x, y, pred_uu[sim_idx, t_idx, : ,var], title='Ux - Prediction')
 plt.savefig('Ux.png')
-run.save('Ux.png', 'output')
+run.save_file('Ux.png', 'output')
 
 var = 1 #v
 fig, ax = plot_unstructured(x, y, test_uu[sim_idx, t_idx+1, : ,var], title='Uy - Actual')
 fig, ax = plot_unstructured(x, y, pred_uu[sim_idx, t_idx, : ,var], title='Uy - Prediction')
 plt.savefig('Uy.png')
-run.save('Uy.png', 'output')
+run.save_file('Uy.png', 'output')
 
-var = 2 #v
+var = 2 #p
 fig, ax = plot_unstructured(x, y, test_uu[sim_idx, t_idx+1, : ,var], title='P - Actual')
 fig, ax = plot_unstructured(x, y, pred_uu[sim_idx, t_idx, : ,var], title='P - Prediction')
 plt.savefig('P.png')
-run.save('P.png', 'output')
+run.save_file('P.png', 'output')
 
 run.close()
 # %%
