@@ -5,6 +5,7 @@ import torch
 from einops import rearrange
 from einops.layers.torch import Rearrange
 
+#Inspired from AI for Science Lecture series at ETH Zurich
 # %% 
 
 class FeedForward(nn.Module):
@@ -88,16 +89,16 @@ class ViT(nn.Module):
     def __init__(self,
                 image_size,
                 patch_size,
-                dim,
+                embed_dim,
                 depth,
-                heads,
+                n_heads,
                 mlp_dim = 256,
                 channels = 1,
                 dim_head = 32,
                 emb_dropout = 0.,):
         super().__init__()
-        image_height, image_width = pair(image_size)
-        patch_height, patch_width = pair(patch_size)
+        image_height, image_width = image_size[0], image_size[1]
+        patch_height, patch_width = patch_size[0], patch_size[1]
 
         assert image_height % patch_height == 0 and image_width % patch_width == 0, 'Image dimensions must be divisible by the patch size.'
 
@@ -107,19 +108,19 @@ class ViT(nn.Module):
         self.to_patch_embedding = nn.Sequential(
             Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = patch_height, p2 = patch_width),
             nn.LayerNorm(patch_dim),
-            nn.Linear(patch_dim, dim),
-            nn.LayerNorm(dim),
+            nn.Linear(patch_dim, embed_dim),
+            nn.LayerNorm(embed_dim),
         )
 
         self.patch_to_image = nn.Sequential(
-            nn.Linear(dim, patch_dim),
+            nn.Linear(embed_dim, patch_dim),
             nn.LayerNorm(patch_dim),
             Rearrange('b (h w) (p1 p2 c) -> b c (h p1) (w p2)', p1 = patch_height, p2 = patch_width, h = image_height // patch_height)
         )
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches, dim))
+        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches, embed_dim))
         self.dropout = nn.Dropout(emb_dropout)
 
-        self.transformer = TransformerBlock(dim, depth, heads, dim_head, mlp_dim)
+        self.transformer = TransformerBlock(embed_dim, depth, n_heads, dim_head, mlp_dim)
 
         self.conv_last = torch.nn.Conv2d(in_channels = channels,
                                           out_channels= channels,
@@ -127,6 +128,7 @@ class ViT(nn.Module):
                                           padding     = 1)
 
     def forward(self, img):
+        img = img[...,0]
         x = self.to_patch_embedding(img)
         _, n, _ = x.shape
         x += self.pos_embedding[:, :n]
@@ -134,44 +136,43 @@ class ViT(nn.Module):
         x = self.transformer(x)
         x = self.patch_to_image(x)
         x = self.conv_last(x)
+        x = torch.unsqueeze(x, -1)
         return x
 
 
-    def print_size(self):
+    def count_params(self):
         nparams = 0
-        nbytes = 0
 
         for param in self.parameters():
             nparams += param.numel()
-            nbytes += param.data.element_size() * param.numel()
-
-        print(f'Total number of model parameters: {nparams}')
-
         return nparams
     
 # %% 
 
-#Example usage
-image_size = 64
-patch_size = 16
-dim = 128
-depth = 4
-heads = 4
-dim_head = 32
-emb_dropout = 0.0
+# #Example usage
+# image_size = (64, 64)
+# patch_size = (16, 16)
+# embed_dim = 128
+# depth = 4
+# n_heads = 4
+# dim_head = 32
+# emb_dropout = 0.0
 
-model = ViT(image_size = image_size,
-            patch_size = patch_size,
-            dim = dim,
-            depth = depth,
-            heads = heads,
-            mlp_dim = 256,
-            channels = 1,
-            dim_head = dim_head,
-            emb_dropout = emb_dropout)
+# model = ViT(image_size = image_size,
+#             patch_size = patch_size,
+#             embed_dim = embed_dim,
+#             depth = depth,
+#             n_heads = n_heads,
+#             mlp_dim = 256,
+#             channels = 1,
+#             dim_head = dim_head,
+#             emb_dropout = emb_dropout)
 
-model.print_size()
+# #Bs, N_vars, Nx, Ny, Nt
+# X = torch.rand(16,1,64,64,1)
+# Y = model(X)
 
-X = torch.rand(16,1,64,64)
-Y = model(X)
+# print(f"Input shape: {X.shape}")
+# print(f"Output shape: {Y.shape}")
+# print(f"Paramters: {model.count_params()}")
 # %%

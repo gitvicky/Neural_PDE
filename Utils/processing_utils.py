@@ -16,6 +16,17 @@ import torch.functional as F
 # Normalisation Functions
 ##################################
 
+def Normalisation(norm_strategy):
+    if norm_strategy == 'Min-Max':
+        normalizer = MinMax_Normalizer
+    elif norm_strategy == 'Range':
+        normalizer = RangeNormalizer
+    elif norm_strategy == 'Gaussian':
+        normalizer = GaussianNormalizer
+    elif norm_strategy == 'Identity':
+        normalizer = Identity
+    return normalizer
+
 # normalization, pointwise gaussian
 class UnitGaussianNormalizer(object):
     def __init__(self, x, eps=0.01):
