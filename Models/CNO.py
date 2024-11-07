@@ -305,6 +305,7 @@ class CNO2d(nn.Module):
         self.res_nets = torch.nn.Sequential(*self.res_nets)
 
     def forward(self, x):
+        x = x[...,0]
                 
         x = self.lift(x) #Execute Lift
         skip = []
@@ -337,12 +338,11 @@ class CNO2d(nn.Module):
         # Cat & Execute Projetion
         x = torch.cat((x, self.ED_expansion[0](skip[0])),1)
         x = self.project(x)
-        
-        
-        
+
+        x = torch.unsqueeze(x, -1)
+            
         return x
     
-
     def count_params(self):
         nparams = 0
 
@@ -350,29 +350,29 @@ class CNO2d(nn.Module):
             nparams += param.numel()
         return nparams
 # %% 
-# #Example Usage
+#Example Usage
 
-# N_layers = 4
-# N_res    = 4
-# N_res_neck = 4
-# channel_multiplier = 16
+N_layers = 4
+N_res    = 4
+N_res_neck = 4
+channel_multiplier = 16
 
-# s = 128
+s = 128
 
-# cno = CNO2d(in_dim = 1,                                    # Number of input channels.
-#             out_dim = 1,                                   # Number of output channels.
-#             size = s,                                      # Input and Output spatial size (required )
-#             N_layers = N_layers,                           # Number of (D) or (U) blocks in the network
-#             N_res = N_res,                                 # Number of (R) blocks per level (except the neck)
-#             N_res_neck = N_res_neck,                       # Number of (R) blocks in the neck
-#             channel_multiplier = channel_multiplier,       # How the number of channels evolve?
-#             use_bn = False)
+cno = CNO2d(in_dim = 1,                                    # Number of input channels.
+            out_dim = 1,                                   # Number of output channels.
+            size = s,                                      # Input and Output spatial size (required )
+            N_layers = N_layers,                           # Number of (D) or (U) blocks in the network
+            N_res = N_res,                                 # Number of (R) blocks per level (except the neck)
+            N_res_neck = N_res_neck,                       # Number of (R) blocks in the neck
+            channel_multiplier = channel_multiplier,       # How the number of channels evolve?
+            use_bn = False)
 
-# X = torch.rand((256, 1, 128, 128)).type(torch.float32)
-# Y = torch.ones((256, 1, 128, 128)).type(torch.float32)
-# out = cno(X)
+X = torch.rand((256, 1, 128, 128, 1)).type(torch.float32)
+Y = torch.ones((256, 1, 128, 128, 1)).type(torch.float32)
+out = cno(X)
 
-# print(f"Input shape: {X.shape}")
-# print(f"Output shape: {Y.shape}")
-# print(f"Paramters: {cno.count_params()}")
+print(f"Input shape: {X.shape}")
+print(f"Output shape: {Y.shape}")
+print(f"Paramters: {cno.count_params()}")
 # %%
