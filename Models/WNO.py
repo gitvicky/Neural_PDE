@@ -2,6 +2,7 @@
 ################################################################
 # Wavelet Neural Operator _ need to fix this up by changing up the wavelet transform to use https://pywavelets.readthedocs.io/en/latest/
 # WNO code from: https://github.com/csccm-iitd/WNO/tree/main
+# Yet to be tested
 ################################################################
 
 

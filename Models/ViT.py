@@ -254,7 +254,7 @@ class VisionTransformer(nn.Module):
     
 # Example usage
 img_size = (128, 128)
-patch_size = (1, 16, 16)
+patch_size = (1, 16, 16) #Should be a factor of img_size. 
 in_channels = 2
 time_channels = 1
 out_channels = 2
