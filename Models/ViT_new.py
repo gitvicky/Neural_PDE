@@ -23,7 +23,7 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-# %% 
+
 
 class AttentionBlock(nn.Module):
     def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
@@ -61,7 +61,6 @@ class AttentionBlock(nn.Module):
         out = rearrange(out, 'b h n d -> b n (h d)')
         return self.to_out(out)
 
-# %% 
 
 class TransformerBlock(nn.Module):
     def __init__(self, dim, depth, heads, dim_head, mlp_dim):
@@ -79,10 +78,6 @@ class TransformerBlock(nn.Module):
             x = ff(x) + x
         return self.norm(x)
 
-def pair(t):
-    return t if isinstance(t, tuple) else (t, t)
-
-# %% 
 
 
 class ViT(nn.Module):
@@ -104,6 +99,7 @@ class ViT(nn.Module):
 
         num_patches = (image_height // patch_height) * (image_width // patch_width)
         patch_dim = channels * patch_height * patch_width
+        print(patch_dim)
 
         self.to_patch_embedding = nn.Sequential(
             Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = patch_height, p2 = patch_width),
@@ -130,6 +126,7 @@ class ViT(nn.Module):
     def forward(self, img):
         img = img[...,0]
         x = self.to_patch_embedding(img)
+        print(x.shape)
         _, n, _ = x.shape
         x += self.pos_embedding[:, :n]
         x = self.dropout(x)
@@ -175,4 +172,4 @@ class ViT(nn.Module):
 # print(f"Input shape: {X.shape}")
 # print(f"Output shape: {Y.shape}")
 # print(f"Paramters: {model.count_params()}")
-# %%
+# # %%
