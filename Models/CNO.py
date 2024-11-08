@@ -374,5 +374,5 @@ class CNO2d(nn.Module):
 
 # print(f"Input shape: {X.shape}")
 # print(f"Output shape: {Y.shape}")
-print(f"Paramters: {cno.count_params()}")
+# print(f"Paramters: {cno.count_params()}")
 # %%

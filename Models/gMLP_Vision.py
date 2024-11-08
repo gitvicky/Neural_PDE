@@ -161,14 +161,14 @@ class gMLP(nn.Module):
             nparams += param.numel()
         return nparams
 
-#Example Usage
+# #Example Usage
 
-X = torch.ones(1, 2, 64, 64, 1) #BS, ndim, Nx, Ny, Nt
-model = gMLP(n_blocks = 8, d_in=2, d_ffn=32, Nx=64, Ny=64)
-Y = model(X)
+# X = torch.ones(1, 2, 64, 64, 1) #BS, ndim, Nx, Ny, Nt
+# model = gMLP(n_blocks = 8, d_in=2, d_ffn=32, Nx=64, Ny=64)
+# Y = model(X)
 
-print(f"Input shape: {X.shape}")
-print(f"Output shape: {Y.shape}")
-print(f"Paramters: {model.count_params()}")
+# print(f"Input shape: {X.shape}")
+# print(f"Output shape: {Y.shape}")
+# print(f"Paramters: {model.count_params()}")
 # %%
 
