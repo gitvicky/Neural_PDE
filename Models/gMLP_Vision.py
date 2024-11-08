@@ -121,7 +121,7 @@ class SpacialGatingUnit(nn.Module):
 
         # $f_{W,b}(Z_2) = W Z_2 + b$
         z2_x = torch.einsum('ij,jkbd->ikbd', weight_x, z2) + self.bias_x[:seq_len, None, None]
-        z2_y = torch.einsum('ik,jkbd->ikbd', weight_y, z2) + self.bias_y[:seq_len, None, None]
+        z2_y = torch.einsum('ik,jkbd->ijbd', weight_y, z2) + self.bias_y[:seq_len, None, None]
 
         # $Z_1 \odot f_{W,b}(Z_2)$
         return z1 * z2_x * z2_y
