@@ -35,7 +35,7 @@ class gMLPBlock(nn.Module):
     [GeLU](https://pytorch.org/docs/stable/generated/torch.nn.GELU.html).
     """
 
-    def __init__(self, d_in: int, d_ffn: int, Nx: int, Ny: int):
+    def __init__(self, d_in: int, d_ffn: int, Nx: int, Ny: int, norm=None):
         """
         * `d_in` is the dimensionality ($d$) of $X$
         * `d_ffn` is the dimensionality of $Z$
@@ -45,7 +45,10 @@ class gMLPBlock(nn.Module):
         """
         super().__init__()
         # Normalization layer fro Pre-Norm
-        self.norm = nn.LayerNorm([d_in])
+        if norm == 'LayerNorm':
+            self.norm = nn.LayerNorm([d_in])
+        else:
+            self.norm = nn.Identity()
         # Activation function $\sigma$
         self.activation = nn.GELU()
         # Projection layer for $Z = \sigma(XU)$
@@ -81,7 +84,6 @@ class gMLPBlock(nn.Module):
 
 
 
-    
 
 class SpacialGatingUnit(nn.Module):
     """
@@ -93,17 +95,26 @@ class SpacialGatingUnit(nn.Module):
     and $\odot$ is element-wise multiplication.
     $Z$ is split into to parts of equal size $Z_1$ and $Z_2$ along the channel dimension (embedding dimension).
     """
-    def __init__(self, d_z: int, Nx: int, Ny: int):
+    def __init__(self, d_z: int, Nx: int, Ny: int, norm=None):
         """
         * `d_z` is the dimensionality of $Z$
         * `seq_len` is the sequence length
         """
         super().__init__()
-        self.norm = nn.LayerNorm([d_z // 2])
-        self.weight_x = nn.Parameter(torch.zeros(Nx, Nx).uniform_(-0.01, 0.01), requires_grad=True)
-        self.bias_x = nn.Parameter(torch.ones(Nx), requires_grad=True)
-        self.weight_y = nn.Parameter(torch.zeros(Ny, Ny).uniform_(-0.01, 0.01), requires_grad=True)
-        self.bias_y = nn.Parameter(torch.ones(Ny), requires_grad=True)
+        if norm == 'LayerNorm':
+            self.norm = nn.LayerNorm([d_z // 2])
+        else:
+            self.norm = nn.Identity()
+
+        #Using einsum 
+        # self.weight_x = nn.Parameter(torch.zeros(Nx, Nx).uniform_(-0.01, 0.01), requires_grad=True)
+        # self.bias_x = nn.Parameter(torch.ones(Nx), requires_grad=True)
+        # self.weight_y = nn.Parameter(torch.zeros(Ny, Ny).uniform_(-0.01, 0.01), requires_grad=True)
+        # self.bias_y = nn.Parameter(torch.ones(Ny), requires_grad=True)
+
+        #Using Permute
+        self.linear_x = nn.Linear(Nx, Nx)
+        self.linear_y = nn.Linear(Ny, Ny)
 
 
     def forward(self, z: torch.Tensor):
@@ -115,13 +126,16 @@ class SpacialGatingUnit(nn.Module):
 
         # Normalize $Z_2$ before $f_{W,b}(\cdot)$
         z2 = self.norm(z2)
-        # Get the weight matrix; truncate if larger than `seq_len`
-        weight_x = self.weight_x[:seq_len, :seq_len]
-        weight_y = self.weight_y[:seq_len, :seq_len]
 
-        # $f_{W,b}(Z_2) = W Z_2 + b$
-        z2_x = torch.einsum('ij,jkbd->ikbd', weight_x, z2) + self.bias_x[:seq_len, None, None]
-        z2_y = torch.einsum('ik,jkbd->ijbd', weight_y, z2) + self.bias_y[:seq_len, None, None]
+        # # Get the weight matrix; truncate if larger than `seq_len`
+        # weight_x = self.weight_x[:seq_len, :seq_len]
+        # weight_y = self.weight_y[:seq_len, :seq_len]
+        # # $f_{W,b}(Z_2) = W Z_2 + b$
+        # z2_x = torch.einsum('ij,jkbd->ikbd', weight_x, z2) + self.bias_x[:seq_len, None, None]
+        # z2_y = torch.einsum('ik,jkbd->ijbd', weight_y, z2) + self.bias_y[:seq_len, None, None]
+
+        z2_x = self.linear_x(z2.permute(1, 2, 3, 0)).permute(3, 0, 1, 2)
+        z2_y = self.linear_y(z2.permute(0, 2, 3, 1)).permute(0, 3, 1, 2)
 
         # $Z_1 \odot f_{W,b}(Z_2)$
         return z1 * z2_x * z2_y
@@ -171,4 +185,3 @@ class gMLP(nn.Module):
 # print(f"Output shape: {Y.shape}")
 # print(f"Paramters: {model.count_params()}")
 # %%
-
