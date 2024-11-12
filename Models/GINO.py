@@ -11,7 +11,7 @@ from functools import partial
 from collections import OrderedDict
 
 from GNNs import *
-from FNO import *
+from Models.FNO_classic import *
 
 class GINO(nn.Module):
     def __init__(self, in_channel, gno_width, out_channel, radius, fno_disc, fno_width, modes):
