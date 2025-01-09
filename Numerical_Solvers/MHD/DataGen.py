@@ -25,8 +25,13 @@ start_time = time()
 
 n_sims = 500
 
-lb = np.asarray([0.5, 0.5, 0.5]) #a, b, c
-ub = np.asarray([1.0, 1.0, 1.0])
+#in-dist
+# lb = np.asarray([0.5, 0.5, 0.5]) #a, b, c
+# ub = np.asarray([1.0, 1.0, 1.0])
+
+#out-dist
+lb = np.asarray([0.1, 0.1, 0.1]) #a, b, c
+ub = np.asarray([0.5, 0.5, 0.5])
 
 params = lb + (ub - lb) * lhs(3, n_sims*2) #Safety 20 
 
@@ -93,6 +98,6 @@ vol = dx**2
 xlin = np.linspace(0.5*dx, boxsize-0.5*dx, N)
 x = xlin
 
-np.savez(os.getcwd() + "/Constrained_MHD_combined.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, dt=dt)
+np.savez(os.getcwd() + "/Constrained_MHD_combined_OOD.npz", rho=rho, u=u, v=v, p=p, Bx=Bx, By=By, x=x, dt=dt)
 
 # %%

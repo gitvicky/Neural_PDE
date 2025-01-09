@@ -11,7 +11,7 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 configuration = {"Case": 'Wave',
                  "Field": 'u',
                  "Model": 'FNO',
-                 "Epochs": 500,
+                 "Epochs": 250,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -21,7 +21,7 @@ configuration = {"Case": 'Wave',
                  "Physics Normalisation": 'No',
                  "Normalisation Strategy": 'Min-Max',
                  "T_in": 1,    
-                 "T_out": 20,
+                 "T_out": 60,
                  "Step": 1,
                  "Width_time": 16, 
                  "Width_vars": 0,  
@@ -61,7 +61,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
 # %%
 #Importing the models and utilities. 
-from Neural_PDE.Models.FNO import *
+from Neural_PDE.Models.FNO_classic import *
 from Neural_PDE.Utils.processing_utils import * 
 from Neural_PDE.Utils.training_utils import * 
 
