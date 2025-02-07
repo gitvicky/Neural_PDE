@@ -6,6 +6,7 @@ Data/
 
 #simvue files
 simvue.ini
+simvue.toml
 
 #Saved Models
 Weights/
