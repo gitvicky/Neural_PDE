@@ -151,9 +151,9 @@ class SpacialGatingUnit(nn.Module):
     
 
 
-# #Example Usage
+#Example Usage
 
-# X = torch.ones(64, 1, 2) # seq_len, BS, ndim
-# model = GMLPBlock(d_model=2, d_ffn=32, seq_len=64)
-# out = model(X)
+X = torch.ones(64, 1, 2) # seq_len, BS, ndim
+model = GMLPBlock(d_model=2, d_ffn=32, seq_len=64)
+out = model(X)
 # %%
