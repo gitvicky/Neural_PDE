@@ -24,7 +24,6 @@ class FeedForward(nn.Module):
         return self.net(x)
 
 
-
 class AttentionBlock(nn.Module):
     def __init__(self, dim, heads = 8, dim_head = 64, dropout = 0.):
         super().__init__()
@@ -125,7 +124,6 @@ class ViT(nn.Module):
     def forward(self, img):
         img = img[...,0]
         x = self.to_patch_embedding(img)
-        print(x.shape)
         _, n, _ = x.shape
         x += self.pos_embedding[:, :n]
         x = self.dropout(x)

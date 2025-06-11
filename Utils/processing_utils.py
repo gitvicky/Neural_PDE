@@ -19,6 +19,8 @@ import torch.functional as F
 def Normalisation(norm_strategy):
     if norm_strategy == 'Min-Max':
         normalizer = MinMax_Normalizer
+    elif norm_strategy == 'Min-Max_variable':
+        normalizer = MinMax_Normalizer_variable
     elif norm_strategy == 'Range':
         normalizer = RangeNormalizer
     elif norm_strategy == 'Gaussian':
@@ -139,29 +141,58 @@ class MinMax_Normalizer_variable(object):
             max_u = torch.max(x[:, ii, :, :, :])
             
             aa.append((high - low) / (max_u - min_u))
-            bb.append( -aa[ii] * max_u + high)
+            bb.append(-aa[ii] * max_u + high)
         
         self.a = torch.tensor(aa)
         self.b = torch.tensor(bb)
+        self.low = low
+        self.high = high
 
-    def encode(self, x):
-        for ii in range(self.num_vars):
-            x[:, ii] = self.a[ii] * x[:, ii] + self.b[ii] 
+    def encode(self, x, var_idx=None):
+        if var_idx is None:
+            # Encode all variables
+            for ii in range(self.num_vars):
+                x[:, ii] = self.a[ii] * x[:, ii] + self.b[ii]
+        else:
+            # Encode only the specified variable
+            if isinstance(var_idx, int):
+                var_idx = [var_idx]  # Convert single index to list
+            
+            for ii, idx in enumerate(var_idx):
+                if 0 <= idx < self.num_vars:
+                    x[:, ii] = self.a[idx] * x[:, ii] + self.b[idx]
+                else:
+                    raise IndexError(f"Variable index {idx} out of range (0-{self.num_vars-1})")
+        
         return x
 
-    def decode(self, x):
-        for ii in range(self.num_vars):
-            x[:, ii] =  (x[:, ii] - self.b[ii])  /  self.a[ii] 
+    def decode(self, x, var_idx=None):
+        if var_idx is None:
+            # Decode all variables
+            for ii in range(self.num_vars):
+                x[:, ii] = (x[:, ii] - self.b[ii]) / self.a[ii]
+        else:
+            # Decode only the specified variable
+            if isinstance(var_idx, int):
+                var_idx = [var_idx]  # Convert single index to list
+            
+            for ii, idx in enumerate(var_idx):
+                if 0 <= idx < self.num_vars:
+                    x[:, ii] = (x[:, ii] - self.b[idx]) / self.a[idx]
+                else:
+                    raise IndexError(f"Variable index {idx} out of range (0-{self.num_vars-1})")
+        
         return x
     
     def cuda(self):
         self.a = self.a.cuda()
         self.b = self.b.cuda()
-
+        return self
 
     def cpu(self):
         self.a = self.a.cpu()
         self.b = self.b.cpu()
+        return self
 
 
 class LogNormalizer(object):
@@ -204,7 +235,7 @@ class LogNormalizer(object):
 
 
     def cpu(self):
-        self.a = self.a.cpu()
+        self.a = self.a.cpu()                                                                                                                                                                                                                         
         self.b = self.b.cpu()
 
 

@@ -83,8 +83,6 @@ class gMLPBlock(nn.Module):
         return z + shortcut
 
 
-
-
 class SpacialGatingUnit(nn.Module):
     """
     ## Spatial Gating Unit
@@ -184,4 +182,4 @@ class gMLP(nn.Module):
 # print(f"Input shape: {X.shape}")
 # print(f"Output shape: {Y.shape}")
 # print(f"Paramters: {model.count_params()}")
-# %%
+# # %%
