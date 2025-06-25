@@ -305,7 +305,7 @@ class CNO2d(nn.Module):
         self.res_nets = torch.nn.Sequential(*self.res_nets)
 
     def forward(self, x):
-        x = x[...,0]
+        # x = x[...,0]
                 
         x = self.lift(x) #Execute Lift
         skip = []
@@ -339,7 +339,7 @@ class CNO2d(nn.Module):
         x = torch.cat((x, self.ED_expansion[0](skip[0])),1)
         x = self.project(x)
 
-        x = torch.unsqueeze(x, -1)
+        # x = torch.unsqueeze(x, -1)
             
         return x
     
@@ -357,7 +357,7 @@ class CNO2d(nn.Module):
 # N_res_neck = 2
 # channel_multiplier = 16
 
-# s = 128
+# s = 64
 
 # cno = CNO2d(in_dim = 3,                                    # Number of input channels.
 #             out_dim = 3,                                   # Number of output channels.
@@ -368,8 +368,8 @@ class CNO2d(nn.Module):
 #             channel_multiplier = channel_multiplier,       # How the number of channels evolve?
 #             use_bn = False)
 
-# X = torch.rand((256, 3, s, s, 1)).type(torch.float32)
-# Y = torch.ones((256, 3, s, s, 1)).type(torch.float32)
+# X = torch.rand((10, 3, s, s)).type(torch.float32)
+# Y = torch.ones((10, 3, s, s)).type(torch.float32)
 # out = cno(X)
 
 # print(f"Input shape: {X.shape}")

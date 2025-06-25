@@ -5,7 +5,7 @@ import torch.nn.functional as F
 import time
 count_parameters = lambda model: sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-from Neural_PDE.Models.boundary_conditions import OptimizedBoundaryManager
+from boundary_conditions import OptimizedBoundaryManager
 
 class Convolution2d(nn.Module):
     def __init__(self, kernel_size=3, in_features=1, out_features=1, init_type='random', boundary_type='periodic'):
@@ -375,33 +375,33 @@ class ConvolutionalModel(nn.Module):
         """
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 # %% 
-# #Example Usage
-# # Basic usage with default settings (3 layers, all periodic boundaries)
-# model = ConvolutionalModel(
-#     in_features=2, 
-#     hidden_features=[8,16,8],
-#     out_features=1, 
-#     num_layers=4,
-#     activation='gelu',
-#     final_activation='none',
-#     init_type='random'
-# )
+#Example Usage
+# Basic usage with default settings (3 layers, all periodic boundaries)
+model = ConvolutionalModel(
+    in_features=2, 
+    hidden_features=[8,16,8],
+    out_features=1, 
+    num_layers=4,
+    activation='gelu',
+    final_activation='none',
+    init_type='random'
+)
 
-# # Advanced usage with layer-specific settings
-# model = ConvolutionalModel(
-#     in_features=3,
-#     hidden_features=[8, 16, 8],  # Different sizes for each hidden layer
-#     out_features=2,
-#     num_layers=5,
-#     kernel_size=[3, 5, 7, 5, 3],  # Different kernel sizes
-#     boundary_type=['periodic', 'symmetric', 'periodic', 'symmetric', 'periodic'],
-#     activation='gelu',
-#     init_type=['random', 'xavier', 'random', 'zeros', 'identity'],
-#     final_activation='tanh'
-# )
+# Advanced usage with layer-specific settings
+model = ConvolutionalModel(
+    in_features=3,
+    hidden_features=[8, 16, 8],  # Different sizes for each hidden layer
+    out_features=2,
+    num_layers=5,
+    kernel_size=[3, 5, 7, 5, 3],  # Different kernel sizes
+    boundary_type=['periodic', 'symmetric', 'periodic', 'symmetric', 'periodic'],
+    activation='gelu',
+    init_type=['random', 'xavier', 'random', 'zeros', 'identity'],
+    final_activation='tanh'
+)
 
-# # Process a batch of data
-# batch_size = 16
-# x = torch.randn(batch_size, 3, 64, 64, 1)  # 5D input tensor
+# Process a batch of data
+batch_size = 16
+x = torch.randn(batch_size, 3, 64, 64, 1)  # 5D input tensor
 # output = model(x)  # Shape: [batch_size, 2, 64, 64, 1]
 # %%

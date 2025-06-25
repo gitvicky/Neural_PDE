@@ -128,17 +128,15 @@ class UNet1d(nn.Module):
 # %% 
 class UNet2d(nn.Module):
 
-    def __init__(self, in_channels=20, out_channels=5, init_features=32, in_vars=1, out_vars=1, dropout=False):
+    def __init__(self, in_channels=20, out_channels=5, init_features=32, dropout=False):
         super(UNet2d, self).__init__()
 
         features = init_features
         self.in_channels = in_channels
         self.out_channels = out_channels
-        self.in_vars = in_vars
-        self.out_vars = out_vars
         self.dropout = dropout
 
-        self.encoder1 = UNet2d._block(in_channels*in_vars, features, name="enc1", dropout=dropout)
+        self.encoder1 = UNet2d._block(in_channels, features, name="enc1", dropout=dropout)
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.encoder2 = UNet2d._block(features, features * 2, name="enc2")
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
@@ -156,12 +154,12 @@ class UNet2d(nn.Module):
         self.decoder1 = UNet2d._block(features * 2, features, name="dec1")
 
         self.conv = nn.Conv2d(
-            in_channels=features, out_channels=out_channels*out_vars, kernel_size=1
+            in_channels=features, out_channels=out_channels, kernel_size=1
         )
 
     def forward(self, x):
-        x = x.permute(0, 1, 4, 2, 3)
-        x = x.view(x.shape[0], self.in_channels * self.in_vars, x.shape[3], x.shape[4])
+        x = x.permute(0, 1, 2, 3)
+        # x = x.view(x.shape[0], self.in_channels, x.shape[3], x.shape[4])
 
         enc1 = self.encoder1(x)
         enc2 = self.encoder2(self.pool1(enc1))
@@ -175,8 +173,8 @@ class UNet2d(nn.Module):
         dec1 = self.decoder1(dec1)
         out = self.conv(dec1)
 
-        out = out.view(out.shape[0], self.out_vars, self.out_channels, out.shape[2], out.shape[3])
-        out = out.permute(0, 1, 3, 4, 2)
+        out = out.view(out.shape[0], self.out_channels, out.shape[2], out.shape[3])
+        out = out.permute(0, 1, 3, 2)
         return out
     
 
@@ -205,8 +203,8 @@ class UNet2d(nn.Module):
         return c
 # %%
 # #Example Usage
-# model = UNet2d(in_channels=5, out_channels=10, init_features=32, in_vars=1, out_vars=2, dropout=False)
+# model = UNet2d(in_channels=5, out_channels=2, init_features=32, dropout=False)
 # print(model.count_params())
-# ins = torch.randn(20,1,100,100,5) #BS, num_vars, Nx, Ny, T_in
+# ins = torch.randn(20,5,100,100) #BS, num_vars, Nx, Ny, T_in
 # outs = model(ins)
 # %% 
