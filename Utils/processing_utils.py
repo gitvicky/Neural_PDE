@@ -27,6 +27,9 @@ def Normalisation(norm_strategy):
         normalizer = Gaussian_Normalizer
     elif norm_strategy == 'Identity':
         normalizer = Identity_Normalizer
+    else:
+        # Fix: Raise proper error for invalid normalization type
+        raise KeyError(f"Unknown normalization strategy: {norm_strategy}")
     return normalizer
 
 # normalization, pointwise gaussian
@@ -101,7 +104,11 @@ class Range_Normalizer(object):
         mymin = torch.min(x, 0)[0].view(-1)
         mymax = torch.max(x, 0)[0].view(-1)
 
-        self.a = (high - low) / (mymax - mymin)
+        # Fix: Handle case where min == max (constant data)
+        range_val = mymax - mymin
+        range_val = torch.where(range_val == 0, torch.ones_like(range_val), range_val)
+        
+        self.a = (high - low) / range_val
         self.b = -self.a * mymax + high
 
     def encode(self, x):
@@ -140,11 +147,18 @@ class MinMax_Normalizer_variable(object):
             min_u = torch.min(x[:, ii, :, :, :])
             max_u = torch.max(x[:, ii, :, :, :])
             
-            aa.append((high - low) / (max_u - min_u))
-            bb.append(-aa[ii] * max_u + high)
+            # Fix: Handle case where min == max (constant data)
+            range_val = max_u - min_u
+            if range_val == 0:
+                # For constant data, set scaling to identity with offset to target range
+                aa.append(torch.tensor(1.0))
+                bb.append(high - min_u)
+            else:
+                aa.append((high - low) / range_val)
+                bb.append(-aa[ii] * max_u + high)
         
-        self.a = torch.tensor(aa)
-        self.b = torch.tensor(bb)
+        self.a = torch.stack(aa)
+        self.b = torch.stack(bb)
         self.low = low
         self.high = high
 
@@ -196,7 +210,7 @@ class MinMax_Normalizer_variable(object):
 
 
 class LogNormalizer(object):
-    def __init__(self, x,  low=0.0, high=1.0, eps=0.01):
+    def __init__(self, x, low=0.0, high=1.0, eps=0.01):
         super(LogNormalizer, self).__init__()
 
         self.num_vars = x.shape[1]
@@ -207,32 +221,41 @@ class LogNormalizer(object):
             min_u = torch.min(x[:, ii, :, :, :])
             max_u = torch.max(x[:, ii, :, :, :])
             
-            aa.append((high - low) / (max_u - min_u))
-            bb.append( -aa[ii] * max_u + high)
+            # Fix: Handle case where min == max (constant data)
+            range_val = max_u - min_u
+            if range_val == 0:
+                aa.append(torch.tensor(1.0))
+                bb.append(high - min_u)
+            else:
+                aa.append((high - low) / range_val)
+                bb.append(-aa[ii] * max_u + high)
         
-        self.a = torch.tensor(aa)
-        self.b = torch.tensor(bb)
-        
+        self.a = torch.stack(aa)
+        self.b = torch.stack(bb)
         self.eps = eps
 
     def encode(self, x):
+        # First apply min-max normalization
         for ii in range(self.num_vars):
             x[:, ii] = self.a[ii] * x[:, ii] + self.b[ii] 
-
+        
+        # Then apply log transform
         x = torch.log(x + 1 + self.eps)
-
         return x
 
     def decode(self, x):
-        for ii in range(self.num_vars):
-            x[:, ii] =  (x[:, ii] - self.b[ii])  /  self.a[ii] 
+        # First reverse log transform
         x = torch.exp(x) - 1 - self.eps
+        
+        # Then reverse min-max normalization
+        for ii in range(self.num_vars):
+            x[:, ii] = (x[:, ii] - self.b[ii]) / self.a[ii] 
+        
         return x
 
     def cuda(self):
         self.a = self.a.cuda()
         self.b = self.b.cuda()
-
 
     def cpu(self):
         self.a = self.a.cpu()                                                                                                                                                                                                                         
@@ -246,20 +269,27 @@ class MinMax_Normalizer(object):
         mymin = torch.min(x)
         mymax = torch.max(x)
 
-        self.a = (high - low)/(mymax - mymin)
-        self.b = -self.a*mymax + high
+        # Fix: Handle case where min == max (constant data)
+        range_val = mymax - mymin
+        if range_val == 0:
+            # For constant data, set scaling to identity with offset to target range
+            self.a = torch.tensor(1.0)
+            self.b = high - mymax
+        else:
+            self.a = (high - low) / range_val
+            self.b = -self.a * mymax + high
 
     def encode(self, x):
         s = x.size()
         x = x.reshape(s[0], -1)
-        x = self.a*x + self.b
+        x = self.a * x + self.b
         x = x.view(s)
         return x
 
     def decode(self, x):
         s = x.size()
         x = x.reshape(s[0], -1)
-        x = (x - self.b)/self.a
+        x = (x - self.b) / self.a
         x = x.view(s)
         return x
 
@@ -276,8 +306,8 @@ class MinMax_Normalizer(object):
 class Identity_Normalizer(object):
     def __init__(self, x, low=-1.0, high=1.0):
         super(Identity_Normalizer, self).__init__()
-        self.a = torch.tensor(0)
-        self.b = torch.tensor(0)
+        self.a = torch.tensor(0.0)
+        self.b = torch.tensor(0.0)
 
     def encode(self, x):
         return x 
