@@ -1,11 +1,14 @@
 # %% 
-import torch
+import torch 
 import torch.nn as nn
 import torch.nn.functional as F
 import time
 count_parameters = lambda model: sum(p.numel() for p in model.parameters() if p.requires_grad)
 
-from Neural_PDE.Models.boundary_conditions import OptimizedBoundaryManager
+import sys 
+sys.path.append('..')
+# Import the new OptimizedBoundaryManager instead of the original BoundaryManager
+from boundary_conditions import OptimizedBoundaryManager
 
 class Convolution2d(nn.Module):
     def __init__(self, kernel_size=3, in_features=1, out_features=1, init_type='random', boundary_type='periodic'):
@@ -57,11 +60,17 @@ class Convolution2d(nn.Module):
         # Set up boundary manager using the optimized version
         self.boundary_manager = OptimizedBoundaryManager(kernel_size)
         self.boundary_manager.set_all_boundaries(boundary_type)
-    
+ 
     def apply_boundary_padding(self, x):
         """
         Apply padding to the input tensor based on boundary conditions.
         Optimized version that processes batches more efficiently.
+        
+        Args:
+            x (torch.Tensor): Input tensor with shape (batch_size, channels, height, width)
+            
+        Returns:
+            torch.Tensor: Padded tensor ready for convolution
         """
         # Fast path: if all boundaries are the same type, we can process the entire batch at once
         if len(set(self.boundary_manager.boundary_types.values())) == 1:
@@ -118,7 +127,7 @@ class Convolution2d(nn.Module):
                 
                 return x
         
-        # Fall back to slower but more flexible approach for mixed boundary types
+        # Fall back to original implementation for mixed boundary types
         batch_size = x.shape[0]
         channels = x.shape[1]
         
@@ -140,19 +149,42 @@ class Convolution2d(nn.Module):
         return torch.cat(result, dim=0)
     
     def get_kernel(self):
-        """Get the current value of the convolution kernel."""
+        """
+        Get the current value of the convolution kernel.
+        
+        Returns:
+            torch.Tensor: The kernel as a tensor
+        """
         return self.kernel.detach()
     
     def count_params(self):
-        """Count the number of parameters in the kernel."""
+        """
+        Count the number of parameters in the kernel.
+        
+        Returns:
+            int: The number of parameters
+        """
         return self.kernel.numel()
     
     def set_boundary_type(self, boundary_type, value=0.0):
-        """Set the boundary condition type for all sides."""
+        """
+        Set the boundary condition type for all sides.
+        
+        Args:
+            boundary_type (str): Type of boundary condition - 'dirichlet', 'neumann', 'periodic', 'symmetric'
+            value (float): Value for Dirichlet boundary condition (default 0.0)
+        """
         self.boundary_manager.set_all_boundaries(boundary_type, value)
     
     def set_specific_boundary(self, side, bc_type, value=0.0):
-        """Set boundary condition for a specific side."""
+        """
+        Set boundary condition for a specific side.
+        
+        Args:
+            side (str): One of 'left', 'right', 'top', 'bottom'
+            bc_type (str): Boundary condition type
+            value (float): Value for Dirichlet boundary condition
+        """
         self.boundary_manager.set_boundary_type(side, bc_type, value)
 
     def forward(self, x=None):
@@ -165,12 +197,26 @@ class Convolution2d(nn.Module):
         
         Returns:
             torch.Tensor: Result of convolution with shape adjusted for output features
+                         (batch_size, out_features, Nx, Ny, 1)
         """
+        import time
+        
+        # Dictionary to store profiling results
+        profile_times = {}
+        
+        start_time = time.time()
+        
         if x is None:
             return self.kernel
         
+        profile_times["initial_check"] = time.time() - start_time
+        start_time = time.time()
+        
         # Input shape validation and save original shape
         original_shape = x.shape
+        
+        profile_times["save_original_shape"] = time.time() - start_time
+        start_time = time.time()
         
         # Handle 5D input [batch_size, features, Nx, Ny, 1]
         if len(original_shape) == 5:
@@ -189,28 +235,52 @@ class Convolution2d(nn.Module):
         else:
             raise ValueError(f"Unexpected input shape: {original_shape}")
         
+        profile_times["reshape_input"] = time.time() - start_time
+        start_time = time.time()
+        
         batch_size = x.shape[0]
         x_channels = x.shape[1]
         
+        profile_times["get_dimensions"] = time.time() - start_time
+        start_time = time.time()
+        
         # Handle the case where input channels don't match kernel in_features
         if x_channels != self.in_features:
+            # Create a new tensor with the correct number of channels
+            new_x = torch.zeros(batch_size, self.in_features, x.shape[2], x.shape[3], device=x.device)
+            
+            profile_times["create_new_tensor"] = time.time() - start_time
+            start_time = time.time()
+            
             # Optimize channel copying for the common case of expanding a single channel
             if x_channels == 1 and self.in_features > 1:
                 # Broadcasting is much faster than a loop for this case
-                x = x.expand(-1, self.in_features, -1, -1)
+                new_x = x.expand(-1, self.in_features, -1, -1)
             else:
-                # Create a new tensor with the correct number of channels
-                new_x = torch.zeros(batch_size, self.in_features, x.shape[2], x.shape[3], device=x.device)
                 # Copy data from the input tensor, handling both cases (more or fewer channels)
                 for i in range(min(x_channels, self.in_features)):
                     new_x[:, i] = x[:, i % x_channels]
-                x = new_x
+            
+            x = new_x
+            
+            profile_times["copy_channels"] = time.time() - start_time
+            start_time = time.time()
         
         # Apply padding based on boundary conditions
+        torch.cuda.synchronize() if x.is_cuda else None  # Ensure accurate timing
+        start_padding = time.time()
         padded_x = self.apply_boundary_padding(x)
+        torch.cuda.synchronize() if padded_x.is_cuda else None
+        profile_times["boundary_padding"] = time.time() - start_padding
         
         # Now perform convolution using F.conv2d
+        torch.cuda.synchronize() if padded_x.is_cuda else None
+        start_conv = time.time()
         output = F.conv2d(padded_x, self.kernel)
+        torch.cuda.synchronize() if output.is_cuda else None
+        profile_times["convolution"] = time.time() - start_conv
+        
+        start_time = time.time()
         
         # Restore original shape format based on the input
         if len(original_shape) == 5:  # Input was [batch_size, features, Nx, Ny, 1]
@@ -225,183 +295,27 @@ class Convolution2d(nn.Module):
                 output = output.squeeze(1)  # -> [batch, Nx, Ny]
             # else: keep as [batch, out_features, Nx, Ny]
         
+        profile_times["reshape_output"] = time.time() - start_time
+        
+        # Print profiling results
+        print("\n--- Forward Pass Profiling Results ---")
+        print(f"{'Operation':<25} {'Time (ms)':<15}")
+        print("-" * 40)
+        total_time = 0
+        for op, t in profile_times.items():
+            ms_time = t * 1000  # Convert to milliseconds
+            total_time += ms_time
+            print(f"{op:<25} {ms_time:<15.4f}")
+        print("-" * 40)
+        print(f"{'Total':<25} {total_time:<15.4f}")
+        print("-----------------------------------\n")
+        
         return output
-
-
-class ConvolutionalModel(nn.Module):
-    """
-    A multi-layer convolutional model using optimized boundary conditions.
-    """
-    def __init__(self, 
-                 in_features=1, 
-                 hidden_features=None, 
-                 out_features=1, 
-                 num_layers=3, 
-                 kernel_size=3,
-                 boundary_type='periodic', 
-                 activation='relu',
-                 init_type='random',
-                 final_activation=None):
-        """
-        Initialize a multi-layer convolutional model.
-        
-        Args:
-            in_features (int): Number of input features/channels
-            hidden_features (int or list): Number of features in hidden layers
-                              If int, all hidden layers have the same number of features
-                              If list, specifies features for each hidden layer
-            out_features (int): Number of output features/channels
-            num_layers (int): Total number of convolutional layers
-            kernel_size (int or list): Size of convolution kernels
-                        If int, all layers use same kernel size
-                        If list, specifies kernel size for each layer
-            boundary_type (str or list): Boundary condition type
-                          If str, all layers use same boundary type
-                          If list, specifies boundary type for each layer
-            activation (str or None): Activation function to use after each layer (except last)
-                        Must be one of: 'gelu', 'relu', 'tanh', 'sigmoid', 'leaky_relu', 'elu', 'selu', 'none'
-            init_type (str or list): Kernel initialization strategy
-                       If str, all layers use same initialization
-                       If list, specifies initialization for each layer
-            final_activation (str or None): Activation function after the final layer
-        """
-        super(ConvolutionalModel, self).__init__()
-        
-        # Map activation function names to their classes
-        self.activation_map = {
-            'gelu': nn.GELU,
-            'relu': nn.ReLU,
-            'tanh': nn.Tanh,
-            'sigmoid': nn.Sigmoid,
-            'leaky_relu': lambda: nn.LeakyReLU(0.2),
-            'elu': nn.ELU,
-            'selu': nn.SELU,
-            'none': None
-        }
-        
-        # Validate and prepare hidden_features
-        if hidden_features is None:
-            hidden_features = max(in_features, out_features)
-        
-        if isinstance(hidden_features, int):
-            hidden_features = [hidden_features] * (num_layers - 1)
-        elif len(hidden_features) != num_layers - 1:
-            raise ValueError(f"If hidden_features is a list, it must have {num_layers-1} elements")
-        
-        # Prepare layer-specific parameters
-        # Convert single values to lists if needed
-        if isinstance(kernel_size, int):
-            kernel_size = [kernel_size] * num_layers
-        elif len(kernel_size) != num_layers:
-            raise ValueError(f"If kernel_size is a list, it must have {num_layers} elements")
-            
-        if isinstance(boundary_type, str):
-            boundary_type = [boundary_type] * num_layers
-        elif len(boundary_type) != num_layers:
-            raise ValueError(f"If boundary_type is a list, it must have {num_layers} elements")
-            
-        if isinstance(init_type, str):
-            init_type = [init_type] * num_layers
-        elif len(init_type) != num_layers:
-            raise ValueError(f"If init_type is a list, it must have {num_layers} elements")
-        
-        # Build feature dimensions for each layer
-        layer_features = [in_features] + hidden_features + [out_features]
-        
-        # Create the layers
-        self.conv_layers = nn.ModuleList()
-        self.activation_layers = nn.ModuleList()
-        
-        for i in range(num_layers):
-            # Create convolutional layer
-            conv = Convolution2d(
-                kernel_size=kernel_size[i],
-                in_features=layer_features[i],
-                out_features=layer_features[i+1],
-                init_type=init_type[i],
-                boundary_type=boundary_type[i]
-            )
-            self.conv_layers.append(conv)
-            
-            # Add activation function (except for the last layer)
-            if i < num_layers - 1:
-                act_fn = self._get_activation(activation)
-                self.activation_layers.append(act_fn)
-            else:
-                # For the final layer, use the specified final_activation (if any)
-                act_fn = self._get_activation(final_activation)
-                self.activation_layers.append(act_fn)
-    
-    def _get_activation(self, activation_name):
-        """Helper method to get activation function module"""
-        if activation_name is None or activation_name.lower() == 'none':
-            return None
-            
-        if activation_name.lower() not in self.activation_map:
-            raise ValueError(f"Unsupported activation: {activation_name}")
-            
-        activation_fn = self.activation_map[activation_name.lower()]
-        if activation_fn is None:
-            return None
-        elif callable(activation_fn) and not isinstance(activation_fn, type):
-            # If it's a factory function like lambda: nn.LeakyReLU(0.2)
-            return activation_fn()
-        else:
-            # If it's a class like nn.ReLU
-            return activation_fn()
-    
-    def forward(self, x):
-        """
-        Forward pass through the model.
-        
-        Args:
-            x (torch.Tensor): Input tensor with shape compatible with first layer
-            
-        Returns:
-            torch.Tensor: Output tensor
-        """
-        for i, (conv, act) in enumerate(zip(self.conv_layers, self.activation_layers)):
-            x = conv(x)
-            if act is not None:
-                x = act(x)
-        return x
-
-    def count_parameters(self):
-        """
-        Count the total number of trainable parameters in the model.
-        
-        Returns:
-            int: Number of parameters
-        """
-        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 # %% 
-# #Example Usage
-# # Basic usage with default settings (3 layers, all periodic boundaries)
-# model = ConvolutionalModel(
-#     in_features=2, 
-#     hidden_features=[8,16,8],
-#     out_features=1, 
-#     num_layers=4,
-#     activation='gelu',
-#     final_activation='none',
-#     init_type='random'
-# )
+# Create the model
+conv = Convolution2d(kernel_size=3, in_features=2, out_features=4)
 
-# # Advanced usage with layer-specific settings
-# model = ConvolutionalModel(
-#     in_features=3,
-#     hidden_features=[8, 16, 8],  # Different sizes for each hidden layer
-#     out_features=2,
-#     num_layers=5,
-#     kernel_size=[3, 5, 7, 5, 3],  # Different kernel sizes
-#     boundary_type=['periodic', 'symmetric', 'periodic', 'symmetric', 'periodic'],
-#     activation='gelu',
-#     init_type=['random', 'xavier', 'random', 'zeros', 'identity'],
-#     final_activation='tanh'
-# )
-
-# # Process a batch of data
-# batch_size = 16
-# x = torch.randn(batch_size, 3, 64, 64, 1)  # 5D input tensor
-# output = model(x)  # Shape: [batch_size, 2, 64, 64, 1]
+# Run a forward pass with profiling
+input_tensor = torch.randn(8, 2, 64, 64, 1)  # A 5D input tensor
+output = conv(input_tensor)
 # %%

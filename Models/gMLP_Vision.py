@@ -184,4 +184,4 @@ Y = model(X)
 print(f"Input shape: {X.shape}")
 print(f"Output shape: {Y.shape}")
 # print(f"Paramters: {model.count_params()}")
-# %%
+# # %%
