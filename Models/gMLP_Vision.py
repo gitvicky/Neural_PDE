@@ -4,6 +4,7 @@ gated MLPs (gMLP) modified to fit for spatial data - not using patching but usin
 ---
 Original Code https://github.com/labmlai/annotated_deep_learning_paper_implementations/blob/master/labml_nn/transformers/gmlp/__init__.py
 ---
+Looking for efficiencies from using permutation and elementwise operations. 
 
 """
 
@@ -35,7 +36,7 @@ class gMLPBlock(nn.Module):
     [GeLU](https://pytorch.org/docs/stable/generated/torch.nn.GELU.html).
     """
 
-    def __init__(self, d_in: int, d_ffn: int, Nx: int, Ny: int, norm=None):
+    def __init__(self, d_in: int, d_ffn: int, Nx: int, Ny: int, norm='LayerNorm'):
         """
         * `d_in` is the dimensionality ($d$) of $X$
         * `d_ffn` is the dimensionality of $Z$
@@ -93,7 +94,7 @@ class SpacialGatingUnit(nn.Module):
     and $\odot$ is element-wise multiplication.
     $Z$ is split into to parts of equal size $Z_1$ and $Z_2$ along the channel dimension (embedding dimension).
     """
-    def __init__(self, d_z: int, Nx: int, Ny: int, norm=None):
+    def __init__(self, d_z: int, Nx: int, Ny: int, norm='LayerNorm'):
         """
         * `d_z` is the dimensionality of $Z$
         * `seq_len` is the sequence length
@@ -104,7 +105,7 @@ class SpacialGatingUnit(nn.Module):
         else:
             self.norm = nn.Identity()
 
-        #Using einsum 
+        # #Using einsum 
         # self.weight_x = nn.Parameter(torch.zeros(Nx, Nx).uniform_(-0.01, 0.01), requires_grad=True)
         # self.bias_x = nn.Parameter(torch.ones(Nx), requires_grad=True)
         # self.weight_y = nn.Parameter(torch.zeros(Ny, Ny).uniform_(-0.01, 0.01), requires_grad=True)
@@ -128,6 +129,7 @@ class SpacialGatingUnit(nn.Module):
         # # Get the weight matrix; truncate if larger than `seq_len`
         # weight_x = self.weight_x[:seq_len, :seq_len]
         # weight_y = self.weight_y[:seq_len, :seq_len]
+
         # # $f_{W,b}(Z_2) = W Z_2 + b$
         # z2_x = torch.einsum('ij,jkbd->ikbd', weight_x, z2) + self.bias_x[:seq_len, None, None]
         # z2_y = torch.einsum('ik,jkbd->ijbd', weight_y, z2) + self.bias_y[:seq_len, None, None]
@@ -173,13 +175,13 @@ class gMLP(nn.Module):
             nparams += param.numel()
         return nparams
 
-# #Example Usage
+#Example Usage
 
-# X = torch.ones(1, 2, 64, 64, 1) #BS, ndim, Nx, Ny, Nt
-# model = gMLP(n_blocks = 8, d_in=2, d_ffn=32, Nx=64, Ny=64)
-# Y = model(X)
+X = torch.ones(1, 2, 64, 64, 1) #BS, ndim, Nx, Ny, Nt
+model = gMLP(n_blocks = 8, d_in=2, d_ffn=32, Nx=64, Ny=64)
+Y = model(X)
 
-# print(f"Input shape: {X.shape}")
-# print(f"Output shape: {Y.shape}")
+print(f"Input shape: {X.shape}")
+print(f"Output shape: {Y.shape}")
 # print(f"Paramters: {model.count_params()}")
 # # %%

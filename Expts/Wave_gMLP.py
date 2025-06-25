@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-FNO modelled over the 2D Wave Equation auto-regressively 
+gMLP modelled over the 2D Wave Equation auto-regressively 
 
 Equation: u_tt = D*(u_xx + u_yy), D=1.0
 
@@ -10,8 +10,8 @@ Equation: u_tt = D*(u_xx + u_yy), D=1.0
 # %%
 configuration = {"Case": 'Wave',
                  "Field": 'u',
-                 "Model": 'FNO',
-                 "Epochs": 250,
+                 "Model": 'gMLP',
+                 "Epochs": 500,
                  "Batch Size": 50,
                  "Optimizer": 'Adam',
                  "Learning Rate": 0.005,
@@ -23,9 +23,8 @@ configuration = {"Case": 'Wave',
                  "T_in": 1,    
                  "T_out": 60,
                  "Step": 1,
-                 "Width_time": 16, 
-                 "Width_vars": 0,  
-                 "Modes": 8,
+                 "Width": 32, 
+                 "n_blocks": 4,
                  "Variables":1, 
                  "Loss Function": 'LP',
                  "UQ": 'None', #None, Dropout
@@ -35,7 +34,7 @@ configuration = {"Case": 'Wave',
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'FNO', 'PIUQ', 'AR', 'Wave'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'gMLP', 'PIUQ', 'AR', 'Wave'], metadata=configuration)
 
 #Saving the current run file and the git hash of the repo
 run.save_file(os.path.abspath(__file__), 'code')
@@ -61,7 +60,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.getcwd())))
 # %%
 #Importing the models and utilities. 
-from Neural_PDE.Models.FNO_classic import *
+from Neural_PDE.Models.gMLP_Vision import *
 from Neural_PDE.Utils.processing_utils import * 
 from Neural_PDE.Utils.training_utils import * 
 
@@ -101,9 +100,9 @@ S = 64 #Grid Size
 T_in = configuration['T_in']
 T_out = configuration['T_out']
 step = configuration['Step']
-modes = configuration['Modes']
-width_vars = configuration['Width_vars']
-width_time = configuration['Width_time']
+# modes = configuration['Modes']
+# width_vars = configuration['Width_vars']
+# width_time = configuration['Width_time']
 output_size = configuration['Step']
 num_vars = configuration['Variables']
 batch_size = configuration['Batch Size']
@@ -162,8 +161,7 @@ print('preprocessing finished, time used:', t2-t1)
 # training and evaluation
 ################################################################
 
-model = FNO_multi2d(T_in, step, modes, modes, num_vars, width_time)
-# model.load_state_dict(torch.load(model_loc + '/FNO_Wave_null-shape.pth', map_location='cpu'))
+model = gMLP(n_blocks = configuration['n_blocks'], d_in=configuration['Variables'], d_ffn=configuration['Width'], Nx=S, Ny=S)
 model.to(device)
 
 run.update_metadata({'Number of Params': int(model.count_params())})
@@ -268,7 +266,7 @@ u_field = pred_set[idx]
 
 ax = fig.add_subplot(2, 3, 4)
 pcm = ax.imshow(u_field[0, :, :, 0], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_1, vmax=v_max_1)
-ax.set_ylabel('FNO')
+ax.set_ylabel('gMLP')
 
 fig.colorbar(pcm, pad=0.05)
 

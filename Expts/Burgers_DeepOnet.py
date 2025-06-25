@@ -1,52 +1,51 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-FNO modelled over the 2D Wave Equation auto-regressively 
+Created on 12 Dec 2023
 
-Equation: u_tt = D*(u_xx + u_yy), D=1.0
+Obtaining the Physics Residuals as a measure of UQ on DeepOnet surrogate for 1D Advection Equation .
+
+Equation: 
+    U_t + v U_x = 0
 
 """
 
-# %%
-configuration = {"Case": 'Wave',
+#%%
+#Training Configuration - used as the config file for simvue.
+configuration = {"Case": 'Burgers',
                  "Field": 'u',
                  "Model": 'DeepOnet',
                  "Epochs": 5000,
                  "Batch Size": 100,
                  "Optimizer": 'Adam',
-                 "Learning Rate": 0.005,
+                 "Learning Rate": 0.001,
                  "Scheduler Step": 1000,
                  "Scheduler Gamma": 0.5,
-                 "Activation": 'GeLU',
-                 "Physics Normalisation": 'No',
+                 "Activation": 'Tanh',
                  "Normalisation Strategy": 'Min-Max',
                  "Layers": 4,
-                 "Width": 64, 
+                 "Width": 256, 
                  "Variables":1, 
-                 "T_out": 20, 
+                 "Noise":0.0, 
                  "Loss Function": 'MSE',
-                 "UQ": 'None', #None, Dropout
                  }
 
-# %%
 import os
 from simvue import Run
 run = Run(mode='online')
-run.init(folder="/Neural_PDE", tags=['NPDE', 'DeepONet', 'Wave'], metadata=configuration)
+run.init(folder="/Neural_PDE", tags=['NPDE', 'Burgers' 'DeepONet', 'Tests'], metadata=configuration)
 
-#Saving the current run file and the git hash of the repo
+# Saving the current run file and the git hash of the repo
 run.save_file(os.path.abspath(__file__), 'code')
 import git
 repo = git.Repo(search_parent_directories=True)
 sha = repo.head.object.hexsha
 run.update_metadata({'Git Hash': sha})
 
-# %% 
 #Importing the necessary packages
 import sys
 import numpy as np
 from tqdm import tqdm 
 import torch
+from torch.utils.data import Dataset, DataLoader
 import matplotlib
 import matplotlib.pyplot as plt
 import time 
@@ -63,7 +62,7 @@ from Neural_PDE.Utils.processing_utils import *
 from Neural_PDE.Utils.training_utils import * 
 
 # %% 
-#Settung up locations. 
+#Setting up locations. 
 file_loc = os.getcwd()
 data_loc = os.path.dirname(os.getcwd()) + '/Data'
 model_loc = file_loc + '/Weights'
@@ -72,21 +71,42 @@ plot_loc = file_loc + '/Plots'
 torch.manual_seed(0)
 np.random.seed(0)
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+torch.set_default_dtype(torch.float32)
 
-# %%
-################################################################
-# Loading Data 
-################################################################
-
+# %% 
 t1 = default_timer()
-data =  np.load(data_loc + '/Spectral_Wave_data_LHS.npz')
 
-u_sol = data['u'].astype(np.float32)
-x = data['x'].astype(np.float32)
-y = data['y'].astype(np.float32)
-t = data['t'].astype(np.float32)[:configuration['T_out']]
-u = torch.from_numpy(u_sol)[:, :configuration['T_out']]
-# u = u.permute(0, 2, 3, 1)
+# Burgers - My sim 
+# data =  np.load(data_loc + '/Burgers_1d.npz')
+# u_sol  = data['u']
+# x = data['x']
+# dt = data['dt']
+# t_end = 1.25
+# x = torch.tensor(x, dtype=torch.float32)
+# t = torch.linspace(0, t_end, 50)
+# t_end = 1.25
+# x = torch.tensor(x, dtype=torch.float32)
+# t = torch.linspace(0, t_end, 50)
+# X,T = torch.meshgrid(x,t)
+# X_loc = torch.column_stack((X.flatten(), T.flatten()))
+# initial_locations = np.arange(0, len(x))
+# u_sol = torch.tensor(u_sol, dtype=torch.float32)
+
+
+#Burgers - Zongyis datasets 
+from scipy.io import loadmat 
+data = loadmat(data_loc + '/burgers_data_R10.mat')
+a_sol = data['a']
+u_sol = data['u']
+x = torch.tensor(np.linspace(0, 1, 8192), dtype=torch.float32)
+t = torch.tensor(np.linspace(0, 1 , 2), dtype=torch.float32)
+X = x.unsqueeze(-1)
+XY_loc = x.unsqueeze(-1)
+initial_locations = np.arange(0, 8192)
+
+a_sol = torch.tensor(u_sol, dtype=torch.float32).unsqueeze(1)
+u_sol = torch.tensor(u_sol, dtype=torch.float32).unsqueeze(1)
+u_sol = torch.concat((a_sol, u_sol), axis=1)
 
 # %% 
 #Setting up the Data for DeepOnet
@@ -106,16 +126,7 @@ class DON_Dataset(Dataset):
         u_init= u_ic[self.initial_locations]
         
         return torch.FloatTensor(u_init), torch.FloatTensor(u_sample)
-
-#%% 
-# Setting up the Data for DON
-x = torch.tensor(x, dtype=torch.float32)
-y = torch.tensor(y, dtype=torch.float32)
-t = torch.tensor(t, dtype=torch.float32)
-X,Y = torch.meshgrid(x,y, indexing='ij')
-XY_loc = torch.column_stack((X.flatten(), Y.flatten()))
-initial_locations = np.arange(0, len(x)*len(y))
-
+    
 # %%
 #Normalising the train and test datasets with the preferred normalisation. 
 
@@ -130,8 +141,7 @@ elif norm_strategy == 'Gaussian':
 elif norm_strategy == 'Identity':
     normalizer = Identity
 
-normalizer = normalizer(u)
-
+normalizer = normalizer(u_sol)
 
 # #Saving Normalisation 
 # saved_normalisations = model_loc + '/' + configuration['Model'] + '_' + configuration['Case'] + '_' +run.name + '_' + 'norms.npz'
@@ -142,13 +152,13 @@ normalizer = normalizer(u)
 
 # run.save_file(saved_normalisations, 'output')
 
+
 # %% 
-#Setting up the Datasets and the Data Loaders
-dataset = DON_Dataset(normalizer.encode(u), initial_locations)
+#Setting up the Datasets nad Loaders. 
+dataset = DON_Dataset(normalizer.encode(u_sol), initial_locations)
 
-train_size = ntrain = int(0.8 * len(dataset))
-val_size = nval = len(dataset) - train_size
-
+train_size = int(0.8 * len(dataset))
+val_size = len(dataset) - train_size
 train_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, val_size])
 
 train_loader = DataLoader(train_dataset, batch_size=configuration['Batch Size'], shuffle=True)
@@ -161,12 +171,11 @@ print('preprocessing finished, time used:', t2-t1)
 ################################################################
 # training and evaluation
 ################################################################
-
-model = DeepONet(in_branch=len(x)*len(y),
+model = DeepONet(in_branch=len(x),
         width_branch=configuration['Width'],
         layers_branch=configuration['Layers'], 
         out_branch=configuration['Width'],
-        in_trunk=3,
+        in_trunk=2,
         width_trunk=configuration['Width'],
         layers_trunk=configuration['Layers'], 
         out_trunk=configuration['Width'])
@@ -175,7 +184,7 @@ model.to(device)
 
 # run.update_metadata({'Number of Params': int(model.count_params())})
 # print("Number of model params : " + str(model.count_params()))
-# model.load_state_dict(torch.load(model_loc + '/DeepOnet_Wave_corporate-sortie.pth', map_location=device))
+model.load_state_dict(torch.load(model_loc + '/DeepOnet_Burgers_complete-dynamic.pth', map_location=device))
 
 #Setting up the optimizer and scheduler, loss and epochs 
 optimizer = torch.optim.Adam(model.parameters(), lr=configuration['Learning Rate'], weight_decay=1e-4)
@@ -187,7 +196,6 @@ epochs = configuration['Epochs']
 ####################################
 #Training Loop 
 ####################################
-
 
 def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
     model.train()
@@ -219,7 +227,7 @@ def train_one_epoch_don(model, train_loader, test_loader, loss_func, optimizer):
                 tr = tr.unsqueeze(0).repeat(br.shape[0], 1, 1)
                 u_t = uu[:,tt].flatten(start_dim=1, end_dim=-1).to(device)
                 im = model(br, tr)
-                test_loss += loss_func(im, u_t)
+                test_loss += loss_func(im, u_t).item()
         
         test_loss =  test_loss / (len(test_loader)*test_loader.batch_size)
 
@@ -235,7 +243,7 @@ def validation_don(model, u0, uu):
             tr = tr.unsqueeze(0).repeat(br.shape[0], 1, 1)
             u_t = uu[:,tt].flatten(start_dim=1, end_dim=-1).to(device)
             im = model(br, tr)
-            pred[:,tt] = im.reshape(im.shape[0], len(x), len(y))
+            pred[:,tt] = im
             
         # Performance Metrics
         MSE_error = (uu - pred).pow(2).mean()
@@ -255,7 +263,7 @@ for ep in range(epochs): #Training Loop - Epochwise
     train_loss = train_loss  #/ ntrain / num_vars
     test_loss = test_loss #/ ntest / num_vars
 
-    print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss,5)}")
+    print(f"Epoch {ep}, Time Taken: {round(t2-t1,3)}, Train Loss: {round(train_loss, 5)}, Test Loss: {round(test_loss, 5)}")
     run.log_metrics({'Train Loss': train_loss, 'Test Loss': test_loss})
     
     scheduler.step()
@@ -267,9 +275,8 @@ saved_model = model_loc + '/' + configuration['Model'] + '_' + configuration['Ca
 torch.save( model.state_dict(), saved_model)
 run.save_file(saved_model, 'output')
 # %%
-#Validation
-
 #Testing 
+test_loader = DataLoader(dataset, batch_size=len(dataset))
 test_u0, test_u_encoded = next(iter(test_loader))
 pred_set_encoded, mse, mae = validation_don(model, test_u0, test_u_encoded)
 
@@ -281,79 +288,53 @@ run.update_metadata({'Training Time': float(train_time),
                      'MAE Test Error': float(mae)
                     })
 
+# %% 
 #Denormalising and reshaping the target and the predictions
 pred_set = normalizer.decode(pred_set_encoded.to(device)).cpu()
-pred_set = pred_set.reshape(len(pred_set), len(t), len(x), len(y))
+pred_set = pred_set.numpy().reshape(len(pred_set), len(t), len(x))
 
 test_u = normalizer.decode(test_u_encoded.to(device)).cpu()
-test_u = test_u.reshape(len(test_u), len(t), len(x), len(y))
+test_u = test_u.numpy().reshape(len(test_u), len(t), len(x))
 
-# %% 
-#Plotting performance
+# %%
+#Plotting the surrogate performance against that of the test data. 
 
+idx = np.random.randint(0, len(pred_set)) 
 idx = 0
-T_out = configuration['T_out']
-u_field = test_u[idx]
-    
-v_min_1 = torch.min(u_field[0])
-v_max_1 = torch.max(u_field[0])
+x_range = x
 
-v_min_2 = torch.min(u_field[int(T_out/ 2)])
-v_max_2 = torch.max(u_field[int(T_out/ 2)])
+u_field_actual = test_u[idx]
+u_field_pred = pred_set[idx]
 
-v_min_3 = torch.min(u_field[-1])
-v_max_3 = torch.max(u_field[-1])
+# v_min = np.min(u_field_actual)
+# v_max = np.min(u_field_actual)
 
 fig = plt.figure(figsize=plt.figaspect(0.5))
-ax = fig.add_subplot(2, 3, 1)
-pcm = ax.imshow(u_field[0], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_1, vmax=v_max_1)
-# ax.title.set_text('Initial')
-ax.title.set_text('t=' + str(0))
-ax.set_ylabel('Solution')
-fig.colorbar(pcm, pad=0.05)
+ax = fig.add_subplot(1,3,1)
+pcm = ax.plot(x_range, u_field_actual[0], color='green', label='Actual')
+pcm = ax.plot(x_range, u_field_pred[0], color='firebrick', label='Prediction')
+# ax.set_ylim([v_min, v_max])
+ax.title.set_text('t='+ str(0))
 
-ax = fig.add_subplot(2, 3, 2)
-pcm = ax.imshow(u_field[int(T_out/ 2)], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_2,
-                vmax=v_max_2)
-# ax.title.set_text('Middle')
-ax.title.set_text('t=' + str(int(T_out / 2)))
-ax.axes.xaxis.set_ticks([])
+# ax = fig.add_subplot(1,3,2)
+# pcm = ax.plot(x_range, u_field_actual[10], color='green', label='Actual')
+# pcm = ax.plot(x_range, u_field_pred[10], color='firebrick', label='Prediction')
+# # ax.set_ylim([v_min, v_max])
+# ax.title.set_text('t='+ str(int((10))))
+# ax.axes.yaxis.set_ticks([])
+
+ax = fig.add_subplot(1,3,3)
+pcm = ax.plot(x_range, u_field_actual[-1], color='green', label='Actual')
+pcm = ax.plot(x_range, u_field_pred[-1], color='firebrick', label='Prediction')
+ax.title.set_text('t='+str(1))
+# ax.set_ylim([v_min, v_max])
 ax.axes.yaxis.set_ticks([])
-fig.colorbar(pcm, pad=0.05)
-
-ax = fig.add_subplot(2, 3, 3)
-pcm = ax.imshow(u_field[-1], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_3, vmax=v_max_3)
-# ax.title.set_text('Final')
-ax.title.set_text('t=' + str(T_out))
-ax.axes.xaxis.set_ticks([])
-ax.axes.yaxis.set_ticks([])
-fig.colorbar(pcm, pad=0.05)
-
-u_field = pred_set[idx]
-
-ax = fig.add_subplot(2, 3, 4)
-pcm = ax.imshow(u_field[0], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_1, vmax=v_max_1)
-ax.set_ylabel('FNO')
-
-fig.colorbar(pcm, pad=0.05)
-
-ax = fig.add_subplot(2, 3, 5)
-pcm = ax.imshow(u_field[int(T_out/ 2)], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_2,
-                vmax=v_max_2)
-ax.axes.xaxis.set_ticks([])
-ax.axes.yaxis.set_ticks([])
-fig.colorbar(pcm, pad=0.05)
-
-ax = fig.add_subplot(2, 3, 6)
-pcm = ax.imshow(u_field[-1], cmap=matplotlib.cm.coolwarm, extent=[9.5, 10.5, -0.5, 0.5], vmin=v_min_3, vmax=v_max_3)
-ax.axes.xaxis.set_ticks([])
-ax.axes.yaxis.set_ticks([])
-fig.colorbar(pcm, pad=0.05)
-
+ax.legend()
 
 plot_name = plot_loc + '/' + configuration['Field'] + '_' + run.name + '.png'
 plt.savefig(plot_name)
 run.save_file(plot_name, 'output')
 
 run.close()
+
 # %%

@@ -30,7 +30,7 @@ tend = 1
 # Lambda = 20
 # aa = 0.25
 # bb = 0.25
-c = 1.0 # Wave Speed <=1.0
+c = 0.5 # Wave Speed <=1.0
 
 
 #Initialising the Solver
@@ -86,7 +86,7 @@ def LHS_Sampling(N=10):
     ic = param_lhs
     u = np.asarray(list_u)
     
-    np.savez('Spectral_Wave_data_LHS.npz', x=x, y=y,t=t, u=u, ic=ic)
+    np.savez('Spectral_Wave_data_LHS_OOD_halfspeed.npz', x=x, y=y,t=t, u=u, ic=ic)
 
 # %%
-LHS_Sampling(1000)
+LHS_Sampling(500)
