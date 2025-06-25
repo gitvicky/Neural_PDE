@@ -22,17 +22,17 @@ def Normalisation(norm_strategy):
     elif norm_strategy == 'Min-Max_variable':
         normalizer = MinMax_Normalizer_variable
     elif norm_strategy == 'Range':
-        normalizer = RangeNormalizer
+        normalizer = Range_Normalizer
     elif norm_strategy == 'Gaussian':
-        normalizer = GaussianNormalizer
+        normalizer = Gaussian_Normalizer
     elif norm_strategy == 'Identity':
-        normalizer = Identity
+        normalizer = Identity_Normalizer
     return normalizer
 
 # normalization, pointwise gaussian
-class UnitGaussianNormalizer(object):
+class UnitGaussian_Normalizer(object):
     def __init__(self, x, eps=0.01):
-        super(UnitGaussianNormalizer, self).__init__()
+        super(UnitGaussian_Normalizer, self).__init__()
 
         # x could be in shape of ntrain*n or ntrain*T*n or ntrain*n*T
         self.mean = torch.mean(x, 0)
@@ -69,9 +69,9 @@ class UnitGaussianNormalizer(object):
 
 
 # normalization, Gaussian
-class GaussianNormalizer(object):
+class Gaussian_Normalizer(object):
     def __init__(self, x, eps=0.01):
-        super(GaussianNormalizer, self).__init__()
+        super(Gaussian_Normalizer, self).__init__()
 
         self.mean = torch.mean(x)
         self.std = torch.std(x)
@@ -95,9 +95,9 @@ class GaussianNormalizer(object):
 
 
 # normalization, scaling by range
-class RangeNormalizer(object):
+class Range_Normalizer(object):
     def __init__(self, x, low=-1.0, high=1.0):
-        super(RangeNormalizer, self).__init__()
+        super(Range_Normalizer, self).__init__()
         mymin = torch.min(x, 0)[0].view(-1)
         mymax = torch.max(x, 0)[0].view(-1)
 
@@ -272,10 +272,10 @@ class MinMax_Normalizer(object):
         self.b = self.b.cpu()
 
 
-#normalization, Identity - does nothing
-class Identity(object):
+#normalization, Identity_Normalizer - does nothing
+class Identity_Normalizer(object):
     def __init__(self, x, low=-1.0, high=1.0):
-        super(Identity, self).__init__()
+        super(Identity_Normalizer, self).__init__()
         self.a = torch.tensor(0)
         self.b = torch.tensor(0)
 
