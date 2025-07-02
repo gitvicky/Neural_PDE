@@ -329,52 +329,167 @@ class Identity_Normalizer(object):
 ##################################
 
 # loss function with rel/abs Lp loss
+# https://github.com/neuraloperator/neuraloperator/blob/main/neuralop/losses/data_losses.py
 class LpLoss(object):
-    def __init__(self, d=2, p=2, size_average=True, reduction=True):
-        super(LpLoss, self).__init__()
+    r"""
+    LpLoss provides the L-p norm between two 
+    discretized d-dimensional functions. Note that 
+    LpLoss always averages over the spatial dimensions.
 
-        # Dimension and Lp-norm type are postive
-        assert d > 0 and p > 0
+    .. note :: 
+        In function space, the Lp norm is an integral over the
+        entire domain. To ensure the norm converges to the integral,
+        we scale the matrix norm by quadrature weights along each spatial dimension.
+
+        If no quadrature is passed at a call to LpLoss, we assume a regular 
+        discretization and take ``1 / measure`` as the quadrature weights. 
+
+    Parameters
+    ----------
+    d : int, optional
+        dimension of data on which to compute, by default 1
+    p : int, optional
+        order of L-norm, by default 2
+        L-p norm: [\sum_{i=0}^n (x_i - y_i)**p] ** (1/p)
+    measure : float or list, optional
+        measure of the domain, by default 1.0
+        either single scalar for each dim, or one per dim
+
+        .. note::
+
+        To perform quadrature, ``LpLoss`` scales ``measure`` by the size
+        of each spatial dimension of ``x``, and multiplies them with 
+        ||x-y||, such that the final norm is a scaled average over the spatial
+        dimensions of ``x``. 
+    reduction : str, optional
+        whether to reduce across the batch and channel dimensions
+        by summing ('sum') or averaging ('mean')
+
+        .. warning:: 
+
+            ``LpLoss`` always reduces over the spatial dimensions according to ``self.measure``.
+            `reduction` only applies to the batch and channel dimensions.
+    eps : float, optional
+        small number added to the denominator for numerical stability when using the relative loss
+
+    Examples
+    --------
+
+    
+    """
+
+    def __init__(self, d=1, p=2, measure=1., reduction='sum', eps=1e-8):
+        super().__init__()
 
         self.d = d
         self.p = p
+        self.eps = eps
+        
+        allowed_reductions = ["sum", "mean"]
+        assert reduction in allowed_reductions,\
+        f"error: expected `reduction` to be one of {allowed_reductions}, got {reduction}"
         self.reduction = reduction
-        self.size_average = size_average
 
-    def abs(self, x, y):
-        num_examples = x.size()[0]
+        if isinstance(measure, float):
+            self.measure = [measure]*self.d
+        else:
+            self.measure = measure
+    
+    @property
+    def name(self):
+        return f"L{self.p}_{self.d}Dloss"
+    
+    def uniform_quadrature(self, x):
+        """
+        uniform_quadrature creates quadrature weights
+        scaled by the spatial size of ``x`` to ensure that 
+        ``LpLoss`` computes the average over spatial dims. 
 
-        # Assume uniform mesh
-        h = 1.0 / (x.size()[1] - 1.0)
+        Parameters
+        ----------
+        x : torch.Tensor
+            input data
 
-        all_norms = (h ** (self.d / self.p)) * torch.norm(x.view(num_examples, -1) - y.view(num_examples, -1), self.p,
-                                                          1)
+        Returns
+        -------
+        quadrature : list
+            list of quadrature weights per-dim
+        """
+        quadrature = [0.0]*self.d
+        for j in range(self.d, 0, -1):
+            quadrature[-j] = self.measure[-j]/x.size(-j)
+        
+        return quadrature
 
-        if self.reduction:
-            if self.size_average:
-                return torch.mean(all_norms)
-            else:
-                return torch.sum(all_norms)
+    def reduce_all(self, x):
+        """
+        reduce x across the batch according to `self.reduction`
 
-        return all_norms
+        Params
+        ------
+        x: torch.Tensor
+            inputs
+        """
+        if self.reduction == 'sum':
+            x = torch.sum(x)
+        else:
+            x = torch.mean(x)
+        
+        return x
+
+    def abs(self, x, y, quadrature=None):
+        """absolute Lp-norm
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            inputs
+        y : torch.Tensor
+            targets
+        quadrature : float or list, optional
+            quadrature weights for integral
+            either single scalar or one per dimension
+        """
+        #Assume uniform mesh
+        if quadrature is None:
+            quadrature = self.uniform_quadrature(x)
+        else:
+            if isinstance(quadrature, float):
+                quadrature = [quadrature]*self.d
+        
+        const = math.prod(quadrature)**(1.0/self.p)
+        diff = const*torch.norm(torch.flatten(x, start_dim=-self.d) - torch.flatten(y, start_dim=-self.d), \
+                                              p=self.p, dim=-1, keepdim=False)
+
+        diff = self.reduce_all(diff).squeeze()
+            
+        return diff
 
     def rel(self, x, y):
+        """
+        rel: relative LpLoss
+        computes ||x-y||/(||y|| + eps)
 
-        num_examples = x.size()[0]
+        Parameters
+        ----------
+        x : torch.Tensor
+            inputs
+        y : torch.Tensor
+            targets
+        """
 
-        diff_norms = torch.norm(x.reshape(num_examples, -1) - y.reshape(num_examples, -1), self.p, 1)
-        y_norms = torch.norm(y.reshape(num_examples, -1), self.p, 1)
+        diff = torch.norm(torch.flatten(x, start_dim=-self.d) - torch.flatten(y, start_dim=-self.d), \
+                          p=self.p, dim=-1, keepdim=False)
+        ynorm = torch.norm(torch.flatten(y, start_dim=-self.d), p=self.p, dim=-1, keepdim=False)
 
-        if self.reduction:
-            if self.size_average:
-                return torch.mean(diff_norms / y_norms)
-            else:
-                return torch.sum(diff_norms / y_norms)
+        diff = diff/(ynorm + self.eps)
 
-        return diff_norms / y_norms
+        diff = self.reduce_all(diff).squeeze()
+            
+        return diff
 
-    def __call__(self, x, y):
-        return self.rel(x, y)
+    def __call__(self, y_pred, y, **kwargs):
+        return self.rel(y_pred, y)
 
 class HsLoss(object):
     def __init__(self, d=2, p=2, k=1, a=None, group=False, size_average=True, reduction=True):

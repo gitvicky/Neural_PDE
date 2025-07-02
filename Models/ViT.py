@@ -143,30 +143,30 @@ class ViT(nn.Module):
     
 # %% 
 
-#Example usage
-image_size = (64, 64)
-patch_size = (16, 16)
-embed_dim = 128
-depth = 4
-n_heads = 4
-dim_head = 32
-emb_dropout = 0.0
+# #Example usage
+# image_size = (64, 64)
+# patch_size = (16, 16)
+# embed_dim = 128
+# depth = 4
+# n_heads = 4
+# dim_head = 32
+# emb_dropout = 0.0
 
-model = ViT(image_size = image_size,
-            patch_size = patch_size,
-            embed_dim = embed_dim,
-            depth = depth,
-            n_heads = n_heads,
-            mlp_dim = 256,
-            channels = 1,
-            dim_head = dim_head,
-            emb_dropout = emb_dropout)
+# model = ViT(image_size = image_size,
+#             patch_size = patch_size,
+#             embed_dim = embed_dim,
+#             depth = depth,
+#             n_heads = n_heads,
+#             mlp_dim = 256,
+#             channels = 1,
+#             dim_head = dim_head,
+#             emb_dropout = emb_dropout)
 
-#Bs, N_vars, Nx, Ny, Nt
-X = torch.rand(16,1,64,64)
-Y = model(X)
+# #Bs, N_vars, Nx, Ny, Nt
+# X = torch.rand(16,1,64,64)
+# Y = model(X)
 
-print(f"Input shape: {X.shape}")
-print(f"Output shape: {Y.shape}")
-print(f"Paramters: {model.count_params()}")
+# print(f"Input shape: {X.shape}")
+# print(f"Output shape: {Y.shape}")
+# print(f"Paramters: {model.count_params()}")
 # %%

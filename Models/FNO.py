@@ -348,6 +348,7 @@ class FNO_multi2d(nn.Module):
         self.activation = torch.nn.GELU()
 
     def forward(self, x):
+        # x = x[...,0].permute(0, 2, 3, 1)
         x = x.permute(0, 2, 3, 1)
         grid = self.get_grid(x.shape, x.device)
 
@@ -375,6 +376,7 @@ class FNO_multi2d(nn.Module):
         x = self.fc2(x)
 
         x = x.permute(0, 3, 1, 2)
+        # x = x.permute(0, 3, 1, 2).unsqueeze(-1)
 
         return x
     
