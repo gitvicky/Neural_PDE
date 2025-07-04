@@ -162,11 +162,10 @@ class gMLP(nn.Module):
 
 
     def forward(self, x):
-        x = x.permute(2, 3, 0, 1)
-
+        x = x[...,0].permute(2, 3, 0, 1)
         for block in self.blocks:
             x = block(x)
-        x = x.permute(2, 3, 0, 1)
+        x = torch.unsqueeze(x, -1).permute(2, 3, 0, 1, 4)
         return x 
 
     def count_params(self):
@@ -179,7 +178,7 @@ class gMLP(nn.Module):
 # %% 
 # #Example Usage
 
-# X = torch.ones(1, 2, 64, 64) #BS, ndim, Nx, Ny
+# X = torch.ones(1, 2, 64, 64, 1) #BS, ndim, Nx, Ny, Nt
 # model = gMLP(n_blocks = 8, d_in=2, d_ffn=32, Nx=64, Ny=64)
 # Y = model(X)
 
