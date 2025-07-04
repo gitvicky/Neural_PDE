@@ -427,13 +427,13 @@ class LNO_multi1d(nn.Module):
 # # ====================================
 # # Example Usage
 # # ====================================
-# if __name__ == "__main__":
-#     # 2D Example
-#     model_2d = LNO_multi2d(T_in=20, step=5, modes1=8, modes2=8, num_vars=1, width_time=32, width_vars=0)
-#     input_2d = torch.randn(100, 1, 64, 64, 20)  # BS, num_vars, Nx, Ny, T_in
-#     output_2d = model_2d(input_2d)
-#     print(f"2D LNO - Input shape: {input_2d.shape}, Output shape: {output_2d.shape}")
-#     print(f"2D LNO - Parameters: {model_2d.count_params()}")
+if __name__ == "__main__":
+    # 2D Example
+    model_2d = LNO_multi2d(T_in=20, step=5, modes1=8, modes2=8, num_vars=1, width_time=32, width_vars=0)
+    input_2d = torch.randn(100, 1, 64, 64, 20)  # BS, num_vars, Nx, Ny, T_in
+    output_2d = model_2d(input_2d)
+    print(f"2D LNO - Input shape: {input_2d.shape}, Output shape: {output_2d.shape}")
+    print(f"2D LNO - Parameters: {model_2d.count_params()}")
 
 #     # 1D Example
 #     model_1d = LNO_multi1d(T_in=20, step=5, modes1=8, num_vars=1, width_time=32, width_vars=0)
@@ -441,3 +441,4 @@ class LNO_multi1d(nn.Module):
 #     output_1d = model_1d(input_1d)
 #     print(f"1D LNO - Input shape: {input_1d.shape}, Output shape: {output_1d.shape}")
 #     print(f"1D LNO - Parameters: {model_1d.count_params()}")
+# %%

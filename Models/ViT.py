@@ -122,7 +122,7 @@ class ViT(nn.Module):
                                           padding     = 1)
 
     def forward(self, img):
-        # x = x[...,0]
+        img = img[...,0]
         x = self.to_patch_embedding(img)
         _, n, _ = x.shape
         x += self.pos_embedding[:, :n]
@@ -130,7 +130,7 @@ class ViT(nn.Module):
         x = self.transformer(x)
         x = self.patch_to_image(x)
         x = self.conv_last(x)
-        # x = torch.unsqueeze(x, dim = -1)
+        x = torch.unsqueeze(x, dim =-1)
         return x
 
 
