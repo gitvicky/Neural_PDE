@@ -3,9 +3,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import time
+
 count_parameters = lambda model: sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 from boundary_conditions import OptimizedBoundaryManager
+
 
 class Convolution2d(nn.Module):
     def __init__(self, kernel_size=3, in_features=1, out_features=1, init_type='random', boundary_type='periodic'):
@@ -21,55 +23,57 @@ class Convolution2d(nn.Module):
         """
         super(Convolution2d, self).__init__()
         
-        # Create a parameter tensor for convolutional kernel with new dimensions
-        # Conv2d expects (out_channels, in_channels, kernel_h, kernel_w)
-        self.kernel = nn.Parameter(torch.empty(out_features, in_features, kernel_size, kernel_size))
         self.in_features = in_features
         self.out_features = out_features
         self.kernel_size = kernel_size
         
+        # Create a parameter tensor for convolutional kernel
+        # Conv2d expects (out_channels, in_channels, kernel_h, kernel_w)
+        self.kernel = nn.Parameter(torch.empty(out_features, in_features, kernel_size, kernel_size))
+        
         # Initialize the kernel based on the specified strategy
-        if init_type == 'random':
-            # Xavier/Glorot initialization
-            nn.init.xavier_uniform_(self.kernel)
-        elif init_type == 'identity':
-            # Initialize to approximate identity operation
-            # This only makes sense when in_features == out_features
-            nn.init.zeros_(self.kernel)
-            if in_features == out_features:
-                # Set center pixel to 1 for corresponding input-output channels
-                for i in range(in_features):
-                    self.kernel[i, i, kernel_size//2, kernel_size//2] = 1.0
-            else:
-                # For different input/output features, use identity where possible, zeros elsewhere
-                min_features = min(in_features, out_features)
-                for i in range(min_features):
-                    self.kernel[i, i, kernel_size//2, kernel_size//2] = 1.0
-        elif init_type == 'zeros':
-            # Initialize with zeros
-            nn.init.zeros_(self.kernel)
-        elif init_type == 'ones':
-            # Initialize with ones
-            nn.init.ones_(self.kernel)
-        else:
-            raise ValueError(f"Unknown initialization type: {init_type}")
+        self._initialize_kernel(init_type)
         
         # Set up boundary manager using the optimized version
         self.boundary_manager = OptimizedBoundaryManager(kernel_size)
         self.boundary_manager.set_all_boundaries(boundary_type)
+    
+    def _initialize_kernel(self, init_type):
+        """Initialize the kernel using the specified strategy."""
+        with torch.no_grad():  # Disable gradient tracking during initialization
+            if init_type == 'random' or init_type == 'xavier':
+                # Xavier/Glorot initialization
+                nn.init.xavier_uniform_(self.kernel)
+            elif init_type == 'identity':
+                # Initialize to approximate identity operation
+                nn.init.zeros_(self.kernel)
+                if self.in_features == self.out_features:
+                    # Set center pixel to 1 for corresponding input-output channels
+                    for i in range(self.in_features):
+                        self.kernel[i, i, self.kernel_size//2, self.kernel_size//2] = 1.0
+                else:
+                    # For different input/output features, use identity where possible
+                    min_features = min(self.in_features, self.out_features)
+                    for i in range(min_features):
+                        self.kernel[i, i, self.kernel_size//2, self.kernel_size//2] = 1.0
+            elif init_type == 'zeros':
+                nn.init.zeros_(self.kernel)
+            elif init_type == 'ones':
+                nn.init.ones_(self.kernel)
+            else:
+                raise ValueError(f"Unknown initialization type: {init_type}")
     
     def apply_boundary_padding(self, x):
         """
         Apply padding to the input tensor based on boundary conditions.
         Optimized version that processes batches more efficiently.
         """
-        # Fast path: if all boundaries are the same type, we can process the entire batch at once
+        # Fast path: if all boundaries are the same type, process entire batch at once
         if len(set(self.boundary_manager.boundary_types.values())) == 1:
             bc_type = next(iter(self.boundary_manager.boundary_types.values()))
             
-            # For symmetric, constant, or replicate, we can use a single F.pad call on the entire batch
+            # For symmetric, constant, or replicate, use single F.pad call on entire batch
             if bc_type in ['symmetric', 'dirichlet', 'neumann', 'outflow']:
-                # Get padding values for all sides
                 pad = (
                     self.boundary_manager.pad_left, 
                     self.boundary_manager.pad_right, 
@@ -85,44 +89,46 @@ class Convolution2d(nn.Module):
                 elif bc_type in ['neumann', 'outflow']:
                     return F.pad(x, pad, mode='replicate')
             
-            # For periodic, we need to handle it specially but can still be optimized
+            # For periodic boundary conditions
             elif bc_type == 'periodic':
-                pad_left = self.boundary_manager.pad_left
-                pad_right = self.boundary_manager.pad_right
-                pad_top = self.boundary_manager.pad_top
-                pad_bottom = self.boundary_manager.pad_bottom
-                
-                # First pad horizontally for all batches and channels at once
-                if pad_left > 0 or pad_right > 0:
-                    left_pad = x[..., -pad_left:] if pad_left > 0 else torch.tensor([], device=x.device)
-                    right_pad = x[..., :pad_right] if pad_right > 0 else torch.tensor([], device=x.device)
-                    
-                    if left_pad.numel() > 0 and right_pad.numel() > 0:
-                        x = torch.cat([left_pad, x, right_pad], dim=-1)
-                    elif left_pad.numel() > 0:
-                        x = torch.cat([left_pad, x], dim=-1)
-                    elif right_pad.numel() > 0:
-                        x = torch.cat([x, right_pad], dim=-1)
-                
-                # Then pad vertically for all batches and channels at once
-                if pad_top > 0 or pad_bottom > 0:
-                    top_pad = x[..., -pad_top:, :] if pad_top > 0 else torch.tensor([], device=x.device)
-                    bottom_pad = x[..., :pad_bottom, :] if pad_bottom > 0 else torch.tensor([], device=x.device)
-                    
-                    if top_pad.numel() > 0 and bottom_pad.numel() > 0:
-                        x = torch.cat([top_pad, x, bottom_pad], dim=-2)
-                    elif top_pad.numel() > 0:
-                        x = torch.cat([top_pad, x], dim=-2)
-                    elif bottom_pad.numel() > 0:
-                        x = torch.cat([x, bottom_pad], dim=-2)
-                
-                return x
+                return self._apply_periodic_padding(x)
         
-        # Fall back to slower but more flexible approach for mixed boundary types
-        batch_size = x.shape[0]
-        channels = x.shape[1]
+        # Fall back to slower approach for mixed boundary types
+        return self._apply_mixed_boundary_padding(x)
+    
+    def _apply_periodic_padding(self, x):
+        """Apply periodic boundary padding efficiently."""
+        pad_left = self.boundary_manager.pad_left
+        pad_right = self.boundary_manager.pad_right
+        pad_top = self.boundary_manager.pad_top
+        pad_bottom = self.boundary_manager.pad_bottom
         
-        # Process each batch and channel separately for proper boundary handling
+        # Pad horizontally
+        if pad_left > 0 or pad_right > 0:
+            pads = []
+            if pad_left > 0:
+                pads.append(x[..., -pad_left:])
+            pads.append(x)
+            if pad_right > 0:
+                pads.append(x[..., :pad_right])
+            x = torch.cat(pads, dim=-1)
+        
+        # Pad vertically
+        if pad_top > 0 or pad_bottom > 0:
+            pads = []
+            if pad_top > 0:
+                pads.append(x[..., -pad_top:, :])
+            pads.append(x)
+            if pad_bottom > 0:
+                pads.append(x[..., :pad_bottom, :])
+            x = torch.cat(pads, dim=-2)
+        
+        return x
+    
+    def _apply_mixed_boundary_padding(self, x):
+        """Apply mixed boundary conditions (slower but more flexible)."""
+        batch_size, channels = x.shape[0], x.shape[1]
+        
         result = []
         for b in range(batch_size):
             channels_result = []
@@ -136,7 +142,6 @@ class Convolution2d(nn.Module):
             batch_result = torch.cat(channels_result, dim=0).unsqueeze(0)
             result.append(batch_result)
         
-        # Stack batches back together
         return torch.cat(result, dim=0)
     
     def get_kernel(self):
@@ -169,10 +174,25 @@ class Convolution2d(nn.Module):
         if x is None:
             return self.kernel
         
-        # Input shape validation and save original shape
+        # Input shape validation and normalization
+        x, original_shape = self._normalize_input_shape(x)
+        
+        # Handle channel dimension mismatch
+        x = self._adjust_input_channels(x)
+        
+        # Apply padding based on boundary conditions
+        padded_x = self.apply_boundary_padding(x)
+        
+        # Perform convolution
+        output = F.conv2d(padded_x, self.kernel)
+        
+        # Restore original shape format
+        return self._restore_output_shape(output, original_shape)
+    
+    def _normalize_input_shape(self, x):
+        """Normalize input to 4D tensor [batch, channels, height, width]."""
         original_shape = x.shape
         
-        # Handle 5D input [batch_size, features, Nx, Ny, 1]
         if len(original_shape) == 5:
             # Remove the last dimension if it's 1
             if original_shape[4] == 1:
@@ -180,7 +200,7 @@ class Convolution2d(nn.Module):
             else:
                 raise ValueError(f"Expected last dimension to be 1, got {original_shape[4]}")
         elif len(original_shape) == 4:
-            # Already in the right format [batch_size, features, Nx, Ny]
+            # Already in the right format
             pass
         elif len(original_shape) == 3:  # [batch, Nx, Ny]
             x = x.unsqueeze(1)  # -> [batch, 1, Nx, Ny]
@@ -189,30 +209,28 @@ class Convolution2d(nn.Module):
         else:
             raise ValueError(f"Unexpected input shape: {original_shape}")
         
-        batch_size = x.shape[0]
-        x_channels = x.shape[1]
+        return x, original_shape
+    
+    def _adjust_input_channels(self, x):
+        """Adjust input channels to match kernel requirements."""
+        batch_size, x_channels = x.shape[0], x.shape[1]
         
-        # Handle the case where input channels don't match kernel in_features
         if x_channels != self.in_features:
-            # Optimize channel copying for the common case of expanding a single channel
             if x_channels == 1 and self.in_features > 1:
-                # Broadcasting is much faster than a loop for this case
+                # Broadcasting is much faster for expanding single channel
                 x = x.expand(-1, self.in_features, -1, -1)
             else:
-                # Create a new tensor with the correct number of channels
-                new_x = torch.zeros(batch_size, self.in_features, x.shape[2], x.shape[3], device=x.device)
-                # Copy data from the input tensor, handling both cases (more or fewer channels)
-                for i in range(min(x_channels, self.in_features)):
+                # Handle general case
+                new_x = torch.zeros(batch_size, self.in_features, x.shape[2], x.shape[3], 
+                                  device=x.device, dtype=x.dtype)
+                for i in range(self.in_features):
                     new_x[:, i] = x[:, i % x_channels]
                 x = new_x
         
-        # Apply padding based on boundary conditions
-        padded_x = self.apply_boundary_padding(x)
-        
-        # Now perform convolution using F.conv2d
-        output = F.conv2d(padded_x, self.kernel)
-        
-        # Restore original shape format based on the input
+        return x
+    
+    def _restore_output_shape(self, output, original_shape):
+        """Restore output to match original input shape format."""
         if len(original_shape) == 5:  # Input was [batch_size, features, Nx, Ny, 1]
             output = output.unsqueeze(-1)  # -> [batch_size, out_features, Nx, Ny, 1]
         elif len(original_shape) == 2:  # Input was [Nx, Ny]
@@ -223,7 +241,6 @@ class Convolution2d(nn.Module):
         elif len(original_shape) == 3:  # Input was [batch, Nx, Ny]
             if self.out_features == 1:
                 output = output.squeeze(1)  # -> [batch, Nx, Ny]
-            # else: keep as [batch, out_features, Nx, Ny]
         
         return output
 
@@ -232,6 +249,18 @@ class ConvolutionalModel(nn.Module):
     """
     A multi-layer convolutional model using optimized boundary conditions.
     """
+    
+    ACTIVATION_MAP = {
+        'gelu': nn.GELU,
+        'relu': nn.ReLU,
+        'tanh': nn.Tanh,
+        'sigmoid': nn.Sigmoid,
+        'leaky_relu': lambda: nn.LeakyReLU(0.2),
+        'elu': nn.ELU,
+        'selu': nn.SELU,
+        'none': None
+    }
+    
     def __init__(self, 
                  in_features=1, 
                  hidden_features=None, 
@@ -248,106 +277,114 @@ class ConvolutionalModel(nn.Module):
         Args:
             in_features (int): Number of input features/channels
             hidden_features (int or list): Number of features in hidden layers
-                              If int, all hidden layers have the same number of features
-                              If list, specifies features for each hidden layer
             out_features (int): Number of output features/channels
             num_layers (int): Total number of convolutional layers
             kernel_size (int or list): Size of convolution kernels
-                        If int, all layers use same kernel size
-                        If list, specifies kernel size for each layer
             boundary_type (str or list): Boundary condition type
-                          If str, all layers use same boundary type
-                          If list, specifies boundary type for each layer
-            activation (str or None): Activation function to use after each layer (except last)
-                        Must be one of: 'gelu', 'relu', 'tanh', 'sigmoid', 'leaky_relu', 'elu', 'selu', 'none'
+            activation (str): Activation function ('gelu', 'relu', 'tanh', 'sigmoid', 'leaky_relu', 'elu', 'selu', 'none')
             init_type (str or list): Kernel initialization strategy
-                       If str, all layers use same initialization
-                       If list, specifies initialization for each layer
             final_activation (str or None): Activation function after the final layer
         """
         super(ConvolutionalModel, self).__init__()
         
-        # Map activation function names to their classes
-        self.activation_map = {
-            'gelu': nn.GELU,
-            'relu': nn.ReLU,
-            'tanh': nn.Tanh,
-            'sigmoid': nn.Sigmoid,
-            'leaky_relu': lambda: nn.LeakyReLU(0.2),
-            'elu': nn.ELU,
-            'selu': nn.SELU,
-            'none': None
-        }
+        # Validate inputs
+        self._validate_inputs(num_layers, activation, final_activation)
         
-        # Validate and prepare hidden_features
+        # Prepare layer-specific parameters
+        layer_params = self._prepare_layer_params(
+            num_layers, in_features, hidden_features, out_features,
+            kernel_size, boundary_type, init_type
+        )
+        
+        # Create the layers
+        self.conv_layers = nn.ModuleList()
+        self.activation_layers = nn.ModuleList()
+        
+        self._build_layers(layer_params, activation, final_activation)
+    
+    def _validate_inputs(self, num_layers, activation, final_activation):
+        """Validate input parameters."""
+        if num_layers < 1:
+            raise ValueError("num_layers must be at least 1")
+        
+        if activation and activation.lower() not in self.ACTIVATION_MAP:
+            raise ValueError(f"Unsupported activation: {activation}")
+        
+        if final_activation and final_activation.lower() not in self.ACTIVATION_MAP:
+            raise ValueError(f"Unsupported final_activation: {final_activation}")
+    
+    def _prepare_layer_params(self, num_layers, in_features, hidden_features, out_features,
+                             kernel_size, boundary_type, init_type):
+        """Prepare parameters for each layer."""
+        # Handle hidden_features
         if hidden_features is None:
             hidden_features = max(in_features, out_features)
         
         if isinstance(hidden_features, int):
             hidden_features = [hidden_features] * (num_layers - 1)
         elif len(hidden_features) != num_layers - 1:
-            raise ValueError(f"If hidden_features is a list, it must have {num_layers-1} elements")
+            raise ValueError(f"hidden_features list must have {num_layers-1} elements")
         
-        # Prepare layer-specific parameters
-        # Convert single values to lists if needed
-        if isinstance(kernel_size, int):
-            kernel_size = [kernel_size] * num_layers
-        elif len(kernel_size) != num_layers:
-            raise ValueError(f"If kernel_size is a list, it must have {num_layers} elements")
-            
-        if isinstance(boundary_type, str):
-            boundary_type = [boundary_type] * num_layers
-        elif len(boundary_type) != num_layers:
-            raise ValueError(f"If boundary_type is a list, it must have {num_layers} elements")
-            
-        if isinstance(init_type, str):
-            init_type = [init_type] * num_layers
-        elif len(init_type) != num_layers:
-            raise ValueError(f"If init_type is a list, it must have {num_layers} elements")
+        # Convert single values to lists
+        def _to_list(param, name):
+            if isinstance(param, (int, str)):
+                return [param] * num_layers
+            elif len(param) != num_layers:
+                raise ValueError(f"{name} list must have {num_layers} elements")
+            return param
+        
+        kernel_sizes = _to_list(kernel_size, "kernel_size")
+        boundary_types = _to_list(boundary_type, "boundary_type")
+        init_types = _to_list(init_type, "init_type")
         
         # Build feature dimensions for each layer
         layer_features = [in_features] + hidden_features + [out_features]
         
-        # Create the layers
-        self.conv_layers = nn.ModuleList()
-        self.activation_layers = nn.ModuleList()
+        return {
+            'layer_features': layer_features,
+            'kernel_sizes': kernel_sizes,
+            'boundary_types': boundary_types,
+            'init_types': init_types
+        }
+    
+    def _build_layers(self, layer_params, activation, final_activation):
+        """Build the convolutional and activation layers."""
+        num_layers = len(layer_params['kernel_sizes'])
         
         for i in range(num_layers):
             # Create convolutional layer
             conv = Convolution2d(
-                kernel_size=kernel_size[i],
-                in_features=layer_features[i],
-                out_features=layer_features[i+1],
-                init_type=init_type[i],
-                boundary_type=boundary_type[i]
+                kernel_size=layer_params['kernel_sizes'][i],
+                in_features=layer_params['layer_features'][i],
+                out_features=layer_params['layer_features'][i+1],
+                init_type=layer_params['init_types'][i],
+                boundary_type=layer_params['boundary_types'][i]
             )
             self.conv_layers.append(conv)
             
-            # Add activation function (except for the last layer)
+            # Add activation function
             if i < num_layers - 1:
+                # Hidden layers use the main activation
                 act_fn = self._get_activation(activation)
-                self.activation_layers.append(act_fn)
             else:
-                # For the final layer, use the specified final_activation (if any)
+                # Final layer uses final_activation
                 act_fn = self._get_activation(final_activation)
-                self.activation_layers.append(act_fn)
+            
+            self.activation_layers.append(act_fn)
     
     def _get_activation(self, activation_name):
-        """Helper method to get activation function module"""
+        """Get activation function module."""
         if activation_name is None or activation_name.lower() == 'none':
             return None
-            
-        if activation_name.lower() not in self.activation_map:
-            raise ValueError(f"Unsupported activation: {activation_name}")
-            
-        activation_fn = self.activation_map[activation_name.lower()]
+        
+        activation_fn = self.ACTIVATION_MAP[activation_name.lower()]
         if activation_fn is None:
             return None
         elif callable(activation_fn) and not isinstance(activation_fn, type):
-            # If it's a factory function like lambda: nn.LeakyReLU(0.2)
+            # Factory function like lambda: nn.LeakyReLU(0.2)
             return activation_fn()
         else:
-            # If it's a class like nn.ReLU
+            # Class like nn.ReLU
             return activation_fn()
     
     def forward(self, x):
@@ -355,53 +392,57 @@ class ConvolutionalModel(nn.Module):
         Forward pass through the model.
         
         Args:
-            x (torch.Tensor): Input tensor with shape compatible with first layer
+            x (torch.Tensor): Input tensor
             
         Returns:
             torch.Tensor: Output tensor
         """
-        for i, (conv, act) in enumerate(zip(self.conv_layers, self.activation_layers)):
+        for conv, act in zip(self.conv_layers, self.activation_layers):
             x = conv(x)
             if act is not None:
                 x = act(x)
         return x
 
     def count_parameters(self):
-        """
-        Count the total number of trainable parameters in the model.
-        
-        Returns:
-            int: Number of parameters
-        """
+        """Count the total number of trainable parameters."""
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
-# %% 
-#Example Usage
-# Basic usage with default settings (3 layers, all periodic boundaries)
-model = ConvolutionalModel(
-    in_features=2, 
-    hidden_features=[8,16,8],
-    out_features=1, 
-    num_layers=4,
-    activation='gelu',
-    final_activation='none',
-    init_type='random'
-)
 
-# Advanced usage with layer-specific settings
-model = ConvolutionalModel(
-    in_features=3,
-    hidden_features=[8, 16, 8],  # Different sizes for each hidden layer
-    out_features=2,
-    num_layers=5,
-    kernel_size=[3, 5, 7, 5, 3],  # Different kernel sizes
-    boundary_type=['periodic', 'symmetric', 'periodic', 'symmetric', 'periodic'],
-    activation='gelu',
-    init_type=['random', 'xavier', 'random', 'zeros', 'identity'],
-    final_activation='tanh'
-)
 
-# Process a batch of data
-batch_size = 16
-x = torch.randn(batch_size, 3, 64, 64, 1)  # 5D input tensor
-# output = model(x)  # Shape: [batch_size, 2, 64, 64, 1]
-# %%
+# Example usage
+if __name__ == "__main__":
+    # Basic usage with default settings
+    model1 = ConvolutionalModel(
+        in_features=2, 
+        hidden_features=[8, 16, 8],
+        out_features=1, 
+        num_layers=4,
+        activation='gelu',
+        final_activation='none',
+        init_type='random'
+    )
+    
+    # Advanced usage with layer-specific settings
+    model2 = ConvolutionalModel(
+        in_features=3,
+        hidden_features=[8, 16, 16, 8],  # Different sizes for each hidden layer
+        out_features=2,
+        num_layers=5,
+        kernel_size=[3, 5, 7, 5, 3],  # Different kernel sizes
+        boundary_type=['periodic', 'symmetric', 'periodic', 'symmetric', 'periodic'],
+        activation='gelu',
+        init_type=['random', 'xavier', 'random', 'zeros', 'identity'],
+        final_activation='tanh'
+    )
+    
+    print(f"Model 1 parameters: {model1.count_parameters()}")
+    print(f"Model 2 parameters: {model2.count_parameters()}")
+    
+    # Test with sample data
+    batch_size = 16
+    x = torch.randn(batch_size, 3, 64, 64, 1)
+    
+    try:
+        output = model2(x)
+        print(f"Output shape: {output.shape}")
+    except Exception as e:
+        print(f"Error: {e}")
