@@ -87,7 +87,8 @@ class ViT(nn.Module):
                 depth,
                 n_heads,
                 mlp_dim = 256,
-                channels = 1,
+                in_channels = 1,      # Input channels (previously 'channels')
+                out_channels = 1,     # Output channels (new parameter)
                 dim_head = 32,
                 emb_dropout = 0.,):
         super().__init__()
@@ -97,27 +98,45 @@ class ViT(nn.Module):
         assert image_height % patch_height == 0 and image_width % patch_width == 0, 'Image dimensions must be divisible by the patch size.'
 
         num_patches = (image_height // patch_height) * (image_width // patch_width)
-        patch_dim = channels * patch_height * patch_width
+        
+        # Input patch dimension based on input channels
+        input_patch_dim = in_channels * patch_height * patch_width
+        
+        # Output patch dimension based on output channels
+        output_patch_dim = out_channels * patch_height * patch_width
+        
+        # Store for later use
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.image_height = image_height
+        self.image_width = image_width
+        self.patch_height = patch_height
+        self.patch_width = patch_width
         
         self.to_patch_embedding = nn.Sequential(
             Rearrange('b c (h p1) (w p2) -> b (h w) (p1 p2 c)', p1 = patch_height, p2 = patch_width),
-            nn.LayerNorm(patch_dim),
-            nn.Linear(patch_dim, embed_dim),
+            nn.LayerNorm(input_patch_dim),
+            nn.Linear(input_patch_dim, embed_dim),
             nn.LayerNorm(embed_dim),
         )
 
         self.patch_to_image = nn.Sequential(
-            nn.Linear(embed_dim, patch_dim),
-            nn.LayerNorm(patch_dim),
-            Rearrange('b (h w) (p1 p2 c) -> b c (h p1) (w p2)', p1 = patch_height, p2 = patch_width, h = image_height // patch_height)
+            nn.Linear(embed_dim, output_patch_dim),
+            nn.LayerNorm(output_patch_dim),
+            Rearrange('b (h w) (p1 p2 c) -> b c (h p1) (w p2)', 
+                     p1 = patch_height, p2 = patch_width, 
+                     h = image_height // patch_height,
+                     c = out_channels)
         )
+        
         self.pos_embedding = nn.Parameter(torch.randn(1, num_patches, embed_dim))
         self.dropout = nn.Dropout(emb_dropout)
 
         self.transformer = TransformerBlock(embed_dim, depth, n_heads, dim_head, mlp_dim)
 
-        self.conv_last = torch.nn.Conv2d(in_channels = channels,
-                                          out_channels= channels,
+        # Final convolution layer that maps from output channels to output channels
+        self.conv_last = torch.nn.Conv2d(in_channels = out_channels,
+                                          out_channels= out_channels,
                                           kernel_size = 3,
                                           padding     = 1)
 
@@ -143,7 +162,7 @@ class ViT(nn.Module):
     
 # %% 
 
-# #Example usage
+# # Example usage with different input/output channels
 # image_size = (64, 64)
 # patch_size = (16, 16)
 # embed_dim = 128
@@ -152,21 +171,61 @@ class ViT(nn.Module):
 # dim_head = 32
 # emb_dropout = 0.0
 
-# model = ViT(image_size = image_size,
+# # Example 1: 3 input channels (RGB), 1 output channel (grayscale)
+# model1 = ViT(image_size = image_size,
 #             patch_size = patch_size,
 #             embed_dim = embed_dim,
 #             depth = depth,
 #             n_heads = n_heads,
 #             mlp_dim = 256,
-#             channels = 1,
+#             in_channels = 3,      # RGB input
+#             out_channels = 1,     # Grayscale output
 #             dim_head = dim_head,
 #             emb_dropout = emb_dropout)
 
-# #Bs, N_vars, Nx, Ny, Nt
-# X = torch.rand(16,1,64,64)
-# Y = model(X)
+# # Example 2: 1 input channel, 5 output channels (multi-task prediction)
+# model2 = ViT(image_size = image_size,
+#             patch_size = patch_size,
+#             embed_dim = embed_dim,
+#             depth = depth,
+#             n_heads = n_heads,
+#             mlp_dim = 256,
+#             in_channels = 1,      # Single channel input
+#             out_channels = 5,     # 5 output channels
+#             dim_head = dim_head,
+#             emb_dropout = emb_dropout)
 
-# print(f"Input shape: {X.shape}")
-# print(f"Output shape: {Y.shape}")
-# print(f"Paramters: {model.count_params()}")
+# # Example 3: 4 input channels, 2 output channels
+# model3 = ViT(image_size = image_size,
+#             patch_size = patch_size,
+#             embed_dim = embed_dim,
+#             depth = depth,
+#             n_heads = n_heads,
+#             mlp_dim = 256,
+#             in_channels = 4,      # 4 input channels
+#             out_channels = 2,     # 2 output channels
+#             dim_head = dim_head,
+#             emb_dropout = emb_dropout)
+
+# # Test the models
+# print("Example 1: RGB to Grayscale")
+# X1 = torch.rand(16, 3, 64, 64, 1)  # 3 input channels
+# Y1 = model1(X1)
+# print(f"Input shape: {X1.shape}")
+# print(f"Output shape: {Y1.shape}")
+# print(f"Parameters: {model1.count_params()}")
+
+# print("\nExample 2: Single channel to 5 channels")
+# X2 = torch.rand(16, 1, 64, 64, 1)  # 1 input channel
+# Y2 = model2(X2)
+# print(f"Input shape: {X2.shape}")
+# print(f"Output shape: {Y2.shape}")
+# print(f"Parameters: {model2.count_params()}")
+
+# print("\nExample 3: 4 channels to 2 channels")
+# X3 = torch.rand(16, 4, 64, 64, 1)  # 4 input channels
+# Y3 = model3(X3)
+# print(f"Input shape: {X3.shape}")
+# print(f"Output shape: {Y3.shape}")
+# print(f"Parameters: {model3.count_params()}")
 # %%

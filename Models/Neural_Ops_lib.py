@@ -5,7 +5,6 @@ This file contains custom neural operator models that extend the functionality o
 It includes implementations of FNO2d and UNO models adapted for multi-dimensional inputs.
 """ 
 # %%
-
 import torch
 import torch.nn as nn
 from neuralop.models import FNO2d
@@ -34,7 +33,13 @@ class UNO_multi2d(nn.Module):
         x = self.uno(x)
         x = torch.unsqueeze(x, -1)
         return x 
-    
+
+    def count_params(self):
+        """
+        Count the number of trainable parameters in the model.
+        """
+        return sum(p.numel() for p in self.uno.parameters() if p.requires_grad)
+
 
 class FNO_multi2d(nn.Module):
     def __init__(self, in_channels, out_channels, width, n_modes_height, n_modes_width, n_layers):
@@ -55,6 +60,13 @@ class FNO_multi2d(nn.Module):
         x = self.fno(x)
         x = torch.unsqueeze(x, -1)
         return x
+    
+    def count_params(self):
+        """
+        Count the number of trainable parameters in the model.
+        """
+        return sum(p.numel() for p in self.fno.parameters() if p.requires_grad)
+
 
 class TFNO_multi2d(nn.Module):
     def __init__(self, in_channels, out_channels, hidden_channels, n_modes_height, n_modes_width, rank=0.05):
@@ -75,9 +87,13 @@ class TFNO_multi2d(nn.Module):
         x = torch.unsqueeze(x, -1)
         return x
 
+    def count_params(self):
+        """
+        Count the number of trainable parameters in the model.
+        """
+        return sum(p.numel() for p in self.tfno.parameters() if p.requires_grad)
 
 # %%
-
 # #Example Usage
 # uno = UNO_multi2d(in_channels=2, out_channels=2, hidden_channels=32)
 # ins = torch.randn(20,2,100,100,1) #BS, num_vars, Nx, Ny, T_in
