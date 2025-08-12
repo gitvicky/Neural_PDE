@@ -270,7 +270,7 @@ def main(N, boxsizeX, boxsizeY, gamma, courant_fac, tStart, tEnd, tOut, useSlope
 	dx = boxsizeX / N
 	vol = dx**2
 	xlin = np.linspace(0.5*dx, boxsizeX-0.5*dx, N)
-	ylin = np.linspace(0.5*dx, boxsizeY-0.5*dx, 3*N)
+	ylin = np.linspace(0.5*dx, boxsizeY-0.5*dx, N)
 	Y, X = np.meshgrid( ylin, xlin )
 	t=tStart
 	
@@ -278,10 +278,10 @@ def main(N, boxsizeX, boxsizeY, gamma, courant_fac, tStart, tEnd, tOut, useSlope
 	g = -0.1  # gravity
 	w0 = 0.0025
 	P0 = 2.5
-	rho = 1. + (Y > 0.75)
+	rho = 1. + (Y > 1.5)
 	vx = np.zeros(X.shape)
 	vy = w0 * (1-np.cos(4*np.pi*X)) * (1-np.cos(4*np.pi*Y/3)) 
-	P = P0 + g * (Y-0.75) * rho
+	P = P0 + g * (Y-1.5) * rho
 	
 	rho, vx, vy, P = addGhostCells(rho, vx, vy, P)
 
@@ -386,14 +386,14 @@ if __name__== "__main__":
 #Example Usage 
 # Simulation parameters
 
-    N                      = 64 # resolution N x 3N
-    boxsizeX               = 0.5
-    boxsizeY               = 1.5
+    N                      = 128 # resolution N x N
+    boxsizeX               = 1.0
+    boxsizeY               = 3.0
     gamma                  = 1.4 # ideal gas gamma
     courant_fac            = 0.4
     tStart                 = 0
     tEnd                   = 15
-    tOut                   = 0.5 # draw frequency
+    tOut                   = 1.0 # draw frequency
     useSlopeLimiting       = False
     plotRealTime = True # switch on for plotting as the simulation goes along
 	

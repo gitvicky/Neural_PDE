@@ -21,7 +21,7 @@ solver = 'Spectral' #Spectral Scheme
 # %%
 start_time = time()
 
-n_sims = 500
+n_sims = 100
 
 if solver == 'Spectral':
     # in-dist
@@ -41,12 +41,12 @@ params = lb + (ub - lb) * lhs(2, n_sims*2) #Safety 20
 if solver == 'Spectral':
     t_slice = 10 
     x_slice = 4
-    nu = 0.01
+    nu = 0.001
 
     #Running the simulation. 
     ii=0
     while ii < n_sims:
-        solver= Navier_Stokes_2d(400, 0.0, 0.5, 0.001, nu, 1, params[ii, 0], params[ii, 1]) # N, t, tEnd, dt, nu, L, a , b  #(a and b are multiplier for the IC - ranging from 0.1 to 1, 1 being used by Philip)
+        solver= Navier_Stokes_2d(400, 0.0, 1.0, 0.001, nu, 1, params[ii, 0], params[ii, 1]) # N, t, tEnd, dt, nu, L, a , b  #(a and b are multiplier for the IC - ranging from 0.1 to 1, 1 being used by Philip)
         u, v, p, w, x, dt,err = solver.solve()
         if err == 0:
             np.savez(os.getcwd() + "/NS_Spectral_" + str(ii) + ".npz", u=u[::t_slice, ::x_slice, ::x_slice], v=v[::t_slice, ::x_slice, ::x_slice], p=p[::t_slice, ::x_slice, ::x_slice], w=w[::t_slice, ::x_slice, ::x_slice], x=x[::x_slice], t=0.001*t_slice)
@@ -82,7 +82,7 @@ if solver == 'Spectral':
     p = np.asarray(p_list)
     w = np.asarray(w_list)
 
-    np.savez(os.getcwd() + "/NS_Spectral_combined_nu_1e-2_OOD.npz", u=u, v=v, p=p, w=w, x=x, dt=0.001*t_slice)
+    np.savez(os.getcwd() + "/NS_Spectral_combined_t_extrapolate.npz", u=u, v=v, p=p, w=w, x=x, dt=0.001*t_slice)
 
 # %% 
 
