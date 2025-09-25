@@ -323,7 +323,7 @@ def solve(N=128, boxsize=1.0, tEnd=0.5, a=1.0, b=1.0, c=1.0):
 	tEnd                   = 0.5
 	tOut                   = 0.01 # draw frequency
 	useSlopeLimiting       = True
-	plotRealTime = True # switch on for plotting as the simulation goes along
+	plotRealTime = False # switch on for plotting as the simulation goes along
 	
 	# Mesh
 	dx = boxsize / N
@@ -464,7 +464,7 @@ tEnd = 0.5 #simulation timescale
 a, b, c = 1.0, 1.0, 1.0 #parameterisation of initial vx, vy, p
 dx = boxsize/N
 
-# rho, u, v, p, bx, by, dt, x, err = solve(N, boxsize, tEnd, a, b, c)
+rho, u, v, p, bx, by, dt, x, err = solve(N, boxsize, tEnd, a, b, c)
 
 # %%
 

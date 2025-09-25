@@ -1,65 +1,64 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+2D wave equation via FFT 
 
-Data Generation of the Convection-Diffusion PDE Solutions
-u_t = D.u_xx +u.D_x - c.u_x
+u_tt = c^2 * (u_xx + u_yy)
 
+on [-1, 1]x[-1, 1], t > 0 and Dirichlet BC u=0
+
+Based on: http://people.bu.edu/andasari/courses/numericalpython/python.html
 """
-
 # %%
-import os
 import numpy as np
-from pyDOE import lhs 
+from scipy import interpolate
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm  
 from tqdm import tqdm 
-from time import time
-from matplotlib import pyplot as plt 
-from ConvDiff_1D import * 
+file_path = '/pitagora_work/FUPB1_UKAEA_ML/vgopakum/Data/'
+
+from convection_diffusion_2D_implicit_JAX import * 
+
+
+Lx, Ly = 10.0, 10.0   # Domain size
+T = 5.0               # Total time
+nx, ny = 64, 64       # Grid resolution
+nt = 100              # Number of time steps
+cx, cy = 0.5, 1.0     # Convection velocities
+D = 0.5              # Diffusion coefficient
+aa, bb = 2.0, 3.0     # Position of Gaussian 
+cc = 4.0             # Width of Gaussian
+
+n_sims = 100
+
+#Initialising the Solver
+solver = ConvectionDiffusionImplicitSolver(Lx, Ly, T, nx, ny, nt, cx, cy, D, bc='periodic')
+def u0_gaussian(X, Y, aa, bb, cc):
+    return jnp.exp(-((X - aa)**2 + (Y - bb)**2) / cc)
 
 # %%
-start_time = time()
+def LHS_Sampling(N=10):
+    #Simulation Data Built using LHS sampling
+    from pyDOE import lhs
+    
+    lb = np.asarray([1.0, 1.0, 1.0]) #aa, bb, cc
+    ub = np.asarray([5.0, 5.0, 5.0]) #aa, bb, cc
+    
+       
+    param_lhs = lb + (ub-lb)*lhs(3, N)
+    
+    list_u = []
+    
+    for ii in tqdm(range(N)):
+                t, u = solver.solve(u0_gaussian, param_lhs[ii, 0], param_lhs[ii, 1], param_lhs[ii, 2])
+                list_u.append(u)
+        
+    ic = param_lhs
+    u = np.asarray(list_u)
+    x = np.linspace(0, Lx, nx)
+    y = np.linspace(0, Ly, ny)
 
-n_sims = 1000
-
-#Two different parameterisations are explored. 
-lb = np.asarray([np.pi, 0.1, 1.0, 0.25]) #D, c, mu, sigma
-ub = np.asarray([2*np.pi, 0.5, 8.0, 0.75])
-
-# lb = np.asarray([2*np.pi, 0.5, 1.0, 0.25]) #D, c, mu, sigma
-# ub = np.asarray([4*np.pi, 1.0, 8.0, 0.75])
-
-params = lb + (ub - lb) * lhs(4, n_sims)
-
-# %%
-#Example Usage
-Nx = 256 #Number of x-points
-Nt = 5000 #Number of time instances 
-x_min = 0.0 #Min of X-range 
-x_max = 10.0 #Max of X-range 
-t_end = 2.5 #Time Maximum
-D_damp = 2*np.pi #Damping Factor
-c = 0.5 #Convection velocity 
-mu = 5 #Gaussian mean
-sigma = 0.5 #Gaussian Variance
-
-t_slice = 50
-
-u_dataset = []  
-D_dataset = []
-D_x_dataset = []
-for ii in tqdm(range(n_sims)):
-    sim = Conv_Diff_1d(Nx, Nt, x_min, x_max, t_end, params[ii,0], params[ii,1], params[ii,2], params[ii,3])
-    u_sol, D, D_x, x, dt = sim.solve()    
-    u_dataset.append(u_sol)
-    D_dataset.append(D)
-    D_x_dataset.append(D_x)
-
-uu = np.asarray(u_dataset)
-D = np.asarray(D_dataset)
-D_x = np.asarray(D_x_dataset)
-# %%
-np.savez(os.getcwd() + '/ConvDiff_u_1.npz', u = uu, D=D, D_x = D_x, x=x, dt=dt, params=params)
-
-end_time = time()
-print("Total Time : " + str(end_time - start_time))
+    np.savez(f'{file_path}ConvDiff_D_{D}_cx_{cx}_cy_{cy}.npz', x=x, y=y, t=t, u=u, ic=ic)
+LHS_Sampling(n_sims)
 # %%

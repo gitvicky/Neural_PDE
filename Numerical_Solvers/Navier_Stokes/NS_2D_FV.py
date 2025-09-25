@@ -194,7 +194,6 @@ def getFlux(rho_L, rho_R, vx_L, vx_R, vy_L, vy_R, P_L, P_R, gamma):
 	return flux_Mass, flux_Momx, flux_Momy, flux_Energy
 
 
-
 def update_status_bar(progress):
     bar_length = 20
     filled_length = int(bar_length * progress // 100)

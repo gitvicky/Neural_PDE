@@ -169,7 +169,7 @@ class Navier_Stokes_2d:
 # #Example Usage
 # N = 400 #Number of grid points
 # tStart = 0.0 #Starting time of the simulation
-# tEnd = 0.5 #Simulation ending time
+# tEnd = 1.0 #Simulation ending time
 # dt = 0.001 #dt
 # nu = 0.001#kinematic viscosity
 # L = 1 #Domain Length
