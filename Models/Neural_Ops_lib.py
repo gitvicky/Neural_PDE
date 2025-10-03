@@ -25,7 +25,8 @@ class UNO_multi2d(nn.Module):
                         uno_scalings=[[1.0,1.0],[0.5,0.5],[1,1],[2,2],[1,1]],
                         horizontal_skips_map=None,
                         channel_mlp_skip="linear",
-                        domain_padding=0.2
+                        domain_padding=0.2,
+                        norm='group_norm' #Testing this
                         )
 
     def forward(self, x):

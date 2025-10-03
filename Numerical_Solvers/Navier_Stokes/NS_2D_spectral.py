@@ -166,16 +166,16 @@ class Navier_Stokes_2d:
 		return np.asarray(u_list), np.asarray(v_list), np.asarray(p_list), np.asarray(w_list), self.xlin, self.dt, error
 
 # %% 
-# #Example Usage
-# N = 400 #Number of grid points
-# tStart = 0.0 #Starting time of the simulation
-# tEnd = 1.0 #Simulation ending time
-# dt = 0.001 #dt
-# nu = 0.001#kinematic viscosity
-# L = 1 #Domain Length
-# aa = 1.0#parametrisation of initial Vx 
-# bb = 1.0#parametrisation of initial Vx 
-# solver= Navier_Stokes_2d(N, tStart, tEnd, dt, nu, L, aa, bb)
+#Example Usage
+N = 400 #Number of grid points
+tStart = 0.0 #Starting time of the simulation
+tEnd = 1.0 #Simulation ending time
+dt = 0.001 #dt
+nu = 0.001#kinematic viscosity
+L = 1 #Domain Length
+aa = 1.0#parametrisation of initial Vx 
+bb = 1.0#parametrisation of initial Vx 
+solver= Navier_Stokes_2d(N, tStart, tEnd, dt, nu, L, aa, bb)
 # u, v, p, w, x, t, err = solver.solve()
 
 # %% 
