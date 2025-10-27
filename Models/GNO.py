@@ -1,3 +1,5 @@
+
+# %%
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -43,8 +45,10 @@ class GNOLayer(MessagePassing):
         edge_weights: Learned weights for each edge [E, in_channels, out_channels]
         """
         # Apply edge-specific transformation: [E, in_channels] @ [E, in_channels, out_channels] -> [E, out_channels]
-        out = torch.bmm(x_j.unsqueeze(1), edge_weights).squeeze(1)
-        return out
+        # out = torch.bmm(x_j.unsqueeze(1), edge_weights).squeeze(1)
+        # return out
+        return torch.einsum('bi,bio->bo', x_j, edge_weights)
+
 
 
 class GNOBlock(nn.Module):
@@ -207,40 +211,47 @@ class GNO(nn.Module):
     def count_params(self):
         return sum(p.numel() for p in self.parameters())
 
+# %% 
+import time 
+# Example usage
+if __name__ == "__main__":
+    disc = 100
+    x = torch.linspace(0, 1, disc)
+    y = torch.linspace(0, 1, disc)
+    
+    # Create GNO model using PyG's MessagePassing as the core
+    model = GNO(
+        in_channels=2,
+        out_channels=2,
+        hidden_channels=16,
+        n_layers=2,
+        r=0.1,
+        x_in=x,
+        y_in=y
+    )
+    
+    print(f"Model input grid: {model.input_spatial_shape}")
+    print(f"Model output grid: {model.output_spatial_shape}")
+    print(f"Parameters: {model.count_params():,}")
+    
+    # Test
+    batch_size = 4
+    xx, yy = torch.meshgrid(x, y, indexing='ij')
+    u = torch.zeros(batch_size, 2, disc, disc)
+    u[:, 0] = torch.sin(2 * np.pi * xx).unsqueeze(0)
+    u[:, 1] = torch.cos(2 * np.pi * yy).unsqueeze(0)
+    u = u.unsqueeze(-1)
+    
+    print(f"\nInput shape: {u.shape}")
+    start = time.time()
+    out = model(u)
+    end = time.time()
+    print(f"Output shape: {out.shape}")
+    print(f"Batched forward pass time: {(end - start) * 1000:.2f} ms")
 
-# # Example usage
-# if __name__ == "__main__":
-#     disc = 100
-#     x = torch.linspace(0, 1, disc)
-#     y = torch.linspace(0, 1, disc)
     
-#     # Create GNO model using PyG's MessagePassing as the core
-#     model = GNO(
-#         in_channels=2,
-#         out_channels=2,
-#         hidden_channels=16,
-#         n_layers=2,
-#         r=0.1,
-#         x_in=x,
-#         y_in=y
-#     )
-    
-#     print(f"Model input grid: {model.input_spatial_shape}")
-#     print(f"Model output grid: {model.output_spatial_shape}")
-#     print(f"Parameters: {model.count_params():,}")
-    
-#     # Test
-#     batch_size = 4
-#     xx, yy = torch.meshgrid(x, y, indexing='ij')
-#     u = torch.zeros(batch_size, 2, disc, disc)
-#     u[:, 0] = torch.sin(2 * np.pi * xx).unsqueeze(0)
-#     u[:, 1] = torch.cos(2 * np.pi * yy).unsqueeze(0)
-#     u = u.unsqueeze(-1)
-    
-#     print(f"\nInput shape: {u.shape}")
-#     out = model(u)
-#     print(f"Output shape: {out.shape}")
-    
-#     print("\nGNOBlock can be imported and used as a standalone module:")
-#     print("from this_module import GNOBlock")
-#     print("gno_layer = GNOBlock(in_channels=32, out_channels=32, hidden_channels=64, edge_dim=4)")
+    print("\nGNOBlock can be imported and used as a standalone module:")
+    print("from this_module import GNOBlock")
+    print("gno_layer = GNOBlock(in_channels=32, out_channels=32, hidden_channels=64, edge_dim=4)")
+
+# %%
