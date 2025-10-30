@@ -174,7 +174,9 @@ class GNO(nn.Module):
         batch_size, channels, N_x, N_y = u.shape
         
         # Reshape to node features
+        print(u.shape)
         u_in = u.permute(0, 2, 3, 1).reshape(batch_size, -1, self.in_channels)
+        print(u_in.shape)
         
         if not self.same_grid:
             # Create output node features (just coordinates)
@@ -215,7 +217,7 @@ class GNO(nn.Module):
 import time 
 # Example usage
 if __name__ == "__main__":
-    disc = 100
+    disc = 32
     x = torch.linspace(0, 1, disc)
     y = torch.linspace(0, 1, disc)
     
@@ -250,8 +252,8 @@ if __name__ == "__main__":
     print(f"Batched forward pass time: {(end - start) * 1000:.2f} ms")
 
     
-    print("\nGNOBlock can be imported and used as a standalone module:")
-    print("from this_module import GNOBlock")
-    print("gno_layer = GNOBlock(in_channels=32, out_channels=32, hidden_channels=64, edge_dim=4)")
+    # print("\nGNOBlock can be imported and used as a standalone module:")
+    # print("from this_module import GNOBlock")
+    # print("gno_layer = GNOBlock(in_channels=32, out_channels=32, hidden_channels=64, edge_dim=4)")
 
 # %%
