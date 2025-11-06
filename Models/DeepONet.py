@@ -112,18 +112,18 @@ class DeepONet(torch.nn.Module):
 
         return c
 # %% 
-# #Example Usage
-# model = DeepONet(in_branch=100,
-#         width_branch=256,
-#         layers_branch=4, 
-#         out_branch=100,
-#         in_trunk=2,
-#         width_trunk=256,
-#         layers_trunk=4, 
-#         out_trunk=100)
+#Example Usage
+model = DeepONet(in_branch=100,
+        width_branch=256,
+        layers_branch=4, 
+        out_branch=100,
+        in_trunk=2,
+        width_trunk=256,
+        layers_trunk=4, 
+        out_trunk=100)
 
-# trunk_in = torch.randn(20, 100)
-# branch_in = torch.randn(20, 10000, 2)
-# output = model(trunk_in, branch_in)
-# print(output.shape)
+trunk_in = torch.randn(20, 100)
+branch_in = torch.randn(20, 100, 2)
+output = model(trunk_in, branch_in)
+print(output.shape)
 # %%

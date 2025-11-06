@@ -16,10 +16,11 @@ Original paper: Lu et al., "Learning nonlinear operators via DeepONet" (2021)
 Modified for NOs4POs by: @vgopakum
 
 Handles:
-1. Grid to coordinate/function conversion
-2. Batched processing
-3. Output reshaping to match grid format
-4. Compatible interface with model_setup.py
+1. Grid to coordinate/function conversion (structured grids)
+2. Point cloud to function/coordinate conversion (unstructured grids)
+3. Batched processing
+4. Output reshaping to match original format
+5. Compatible interface with model_setup.py
 """
 # %%
 import numpy as np
@@ -151,10 +152,11 @@ class DeepONetWrapper(nn.Module):
     Wrapper that makes DeepONet compatible with grid-based training.
     
     Handles:
-    - Grid to function/coordinate conversion
-    - Batched processing
-    - Multi-channel input/output
-    - Output reshaping
+    - Structured (grid) and Unstructured (point cloud) inputs.
+    - Grid to function/coordinate conversion.
+    - Batched processing.
+    - Multi-channel input/output.
+    - Output reshaping.
     """
     
     def __init__(
@@ -168,6 +170,7 @@ class DeepONetWrapper(nn.Module):
         x_in,
         y_in,
         basis_size,
+        grid_type='structured', # 'structured' or 'unstructured'
         activation=F.gelu,
         branch_dropout=0.0,
         trunk_dropout=0.0
@@ -175,54 +178,61 @@ class DeepONetWrapper(nn.Module):
         """
         Parameters
         ----------
-        in_channels : int
-            Number of input channels/variables
-        out_channels : int
-            Number of output channels/variables
-        branch_width : int
-            Width of branch network
-        trunk_width : int
-            Width of trunk network
-        branch_depth : int
-            Depth of branch network
-        trunk_depth : int
-            Depth of trunk network
+        ...
         x_in : torch.Tensor
-            x-coordinates of the grid
+            - If grid_type='structured': 1D tensor of x-coordinates
+            - If grid_type='unstructured': 1D tensor of x-coordinates (len N)
         y_in : torch.Tensor
-            y-coordinates of the grid
-        basis_size : int
-            Size of the basis (output_size in DeepONet)
-        activation : callable
-            Activation function
-        branch_dropout : float
-            Dropout rate for branch network
-        trunk_dropout : float
-            Dropout rate for trunk network
+            - If grid_type='structured': 1D tensor of y-coordinates
+            - If grid_type='unstructured': 1D tensor of y-coordinates (len N)
+        grid_type : str, optional
+            Type of grid. 'structured' for [B, C, Nx, Ny] or 'unstructured' 
+            for [B, C, N]. Default is 'structured'.
+        ...
         """
         super().__init__()
         
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.basis_size = basis_size
-        
+        self.grid_type = grid_type
+
         # Register coordinate tensors as buffers
         self.register_buffer('x_in', x_in if isinstance(x_in, torch.Tensor) 
                            else torch.tensor(x_in, dtype=torch.float32))
         self.register_buffer('y_in', y_in if isinstance(y_in, torch.Tensor) 
                            else torch.tensor(y_in, dtype=torch.float32))
         
-        # Create coordinate grid
-        xx, yy = torch.meshgrid(self.x_in, self.y_in, indexing='ij')
-        coords = torch.stack([xx.flatten(), yy.flatten()], dim=-1)
-        self.register_buffer('coords', coords)
-        
-        self.N_x = len(self.x_in)
-        self.N_y = len(self.y_in)
-        self.N = self.N_x * self.N_y
-        
-        self.input_spatial_shape = (self.N_x, self.N_y)
-        self.output_spatial_shape = (self.N_x, self.N_y)
+        if self.grid_type == 'structured':
+            # Create structured coordinate grid
+            xx, yy = torch.meshgrid(self.x_in, self.y_in, indexing='ij')
+            coords = torch.stack([xx.flatten(), yy.flatten()], dim=-1)
+            
+            self.N_x = len(self.x_in)
+            self.N_y = len(self.y_in)
+            self.N = self.N_x * self.N_y
+            
+            self.input_spatial_shape = (self.N_x, self.N_y)
+            self.output_spatial_shape = (self.N_x, self.N_y)
+            
+        elif self.grid_type == 'unstructured':
+            # Create unstructured coordinate grid
+            assert len(self.x_in) == len(self.y_in), \
+                "x_in and y_in must have the same length for unstructured grid"
+            coords = torch.stack([self.x_in, self.y_in], dim=-1)
+            
+            self.N = len(self.x_in)
+            self.N_x = None
+            self.N_y = None
+            
+            self.input_spatial_shape = (self.N,)
+            self.output_spatial_shape = (self.N,)
+            
+        else:
+            raise ValueError(f"Unknown grid_type: '{self.grid_type}'. "
+                             "Must be 'structured' or 'unstructured'.")
+
+        self.register_buffer('coords', coords) # Shape [N, 2]
         
         # Create DeepONets for each output channel
         self.deeponets = nn.ModuleList([
@@ -243,25 +253,30 @@ class DeepONetWrapper(nn.Module):
     
     def forward(self, u):
         """
-        Forward pass converting grid format to function format and back.
+        Forward pass converting grid/point format to function format and back.
         
         Parameters
         ----------
         u : torch.Tensor
-            Input of shape (B, in_channels, N_x, N_y, 1) or (B, in_channels, N_x, N_y)
+            - If structured: (B, C_in, N_x, N_y, 1) or (B, C_in, N_x, N_y)
+            - If unstructured: (B, C_in, N, 1) or (B, C_in, N)
         
         Returns
         -------
         output : torch.Tensor
-            Output of shape (B, out_channels, N_x, N_y, 1)
+            - If structured: (B, C_out, N_x, N_y, 1)
+            - If unstructured: (B, C_out, N, 1)
         """
-        # Handle 5D input
-        if u.dim() == 5:
-            u = u[..., 0]  # Remove time dimension
+        # Handle trailing time dimension
+        if u.shape[-1] == 1:
+            u = u.squeeze(-1)
+        # u is now [B, C, Nx, Ny] or [B, C, N]
         
-        batch_size, channels, N_x, N_y = u.shape
+        batch_size = u.shape[0]
         
-        # Flatten input function for branch network: [B, C, H, W] -> [B, C*H*W]
+        # Flatten input function for branch network:
+        # [B, C, Nx, Ny] -> [B, C*Nx*Ny]
+        # [B, C, N]      -> [B, C*N]
         branch_input = u.reshape(batch_size, -1)
         
         # Trunk input is the coordinate grid: [N, 2]
@@ -277,8 +292,13 @@ class DeepONetWrapper(nn.Module):
         # Stack outputs: [out_channels, B, N] -> [B, out_channels, N]
         output = torch.stack(outputs, dim=1)
         
-        # Reshape to grid: [B, out_channels, N] -> [B, out_channels, H, W]
-        output = output.reshape(batch_size, self.out_channels, self.N_x, self.N_y)
+        # Reshape to grid
+        if self.grid_type == 'structured':
+            # [B, C_out, N] -> [B, C_out, Nx, Ny]
+            output = output.reshape(batch_size, self.out_channels, self.N_x, self.N_y)
+        elif self.grid_type == 'unstructured':
+            # Output is already [B, C_out, N], which is the correct shape
+            pass 
         
         # Add time dimension for compatibility
         output = output.unsqueeze(-1)
@@ -299,39 +319,32 @@ class DeepONet(nn.Module):
     DeepONet for grid-based PDE problems.
     
     Compatible with NOs4POs training infrastructure.
+    Can handle both structured 2D grids and unstructured 2D point clouds.
     
-    The DeepONet learns operators using a branch-trunk architecture:
-    - Branch network: Encodes the input function (learns from data)
-    - Trunk network: Encodes query locations (learns coordinate patterns)
-    - Output: Inner product of branch and trunk + bias
+    ...
     
     Parameters
     ----------
-    in_channels : int
-        Number of input variables/channels
-    out_channels : int
-        Number of output variables/channels
-    branch_width : int
-        Width of branch network hidden layers
-    trunk_width : int
-        Width of trunk network hidden layers
-    branch_depth : int
-        Number of layers in branch network
-    trunk_depth : int
-        Number of layers in trunk network
-    x_in : torch.Tensor
-        x-coordinates of the grid
-    y_in : torch.Tensor
-        y-coordinates of the grid
-    basis_size : int
-        Size of basis functions (output dimension of branch/trunk)
-        Higher = more expressive but more parameters
-    activation : callable
-        Activation function (default: F.gelu)
-    branch_dropout : float
-        Dropout rate for branch network
-    trunk_dropout : float
-        Dropout rate for trunk network
+    ...
+    grid_type : str, optional
+        'structured' (default): Input data is on a regular grid.
+            `x_in` and `y_in` are 1D vectors defining the grid axes.
+            Input shape: [B, C, Nx, Ny, 1]
+        'unstructured': Input data is a point cloud.
+            `x_in` and `y_in` must be 1D vectors of length N 
+            specifying the coordinates of each point.
+            Input shape: [B, C, N, 1]
+    x_in : torch.Tensor or None
+        - If grid_type='structured': 1D tensor of x-coordinates (len Nx).
+          If None, defaults to linspace(0, 1, 64).
+        - If grid_type='unstructured': 1D tensor of x-coordinates (len N).
+          Must be provided.
+    y_in : torch.Tensor or None
+        - If grid_type='structured': 1D tensor of y-coordinates (len Ny).
+          If None, defaults to linspace(0, 1, 64).
+        - If grid_type='unstructured': 1D tensor of y-coordinates (len N).
+          Must be provided.
+    ...
     """
     
     def __init__(
@@ -342,6 +355,7 @@ class DeepONet(nn.Module):
         trunk_width=256,
         branch_depth=4,
         trunk_depth=4,
+        grid_type='structured',
         x_in=None,
         y_in=None,
         basis_size=100,
@@ -351,11 +365,19 @@ class DeepONet(nn.Module):
     ):
         super().__init__()
         
-        # Default grid
-        if x_in is None:
-            x_in = torch.linspace(0, 1, 64)
-        if y_in is None:
-            y_in = torch.linspace(0, 1, 64)
+        # Validate and set default coordinates based on grid type
+        if grid_type == 'structured':
+            if x_in is None:
+                x_in = torch.linspace(0, 1, 64)
+            if y_in is None:
+                y_in = torch.linspace(0, 1, 64)
+        elif grid_type == 'unstructured':
+            if x_in is None or y_in is None:
+                raise ValueError("x_in and y_in must be provided "
+                                 "for 'unstructured' grid_type")
+        else:
+            raise ValueError(f"Unknown grid_type: '{grid_type}'. "
+                             "Must be 'structured' or 'unstructured'.")
         
         # Wrap for grid compatibility
         self.model = DeepONetWrapper(
@@ -365,6 +387,7 @@ class DeepONet(nn.Module):
             trunk_width=trunk_width,
             branch_depth=branch_depth,
             trunk_depth=trunk_depth,
+            grid_type=grid_type,
             x_in=x_in,
             y_in=y_in,
             basis_size=basis_size,
@@ -388,73 +411,111 @@ class DeepONet(nn.Module):
         return self.model.output_spatial_shape
 
 
-# # ============================================================================
-# # Testing and Examples
-# # ============================================================================
+# ============================================================================
+# Testing and Examples
+# ============================================================================
 
-# if __name__ == "__main__":
-#     print("=" * 70)
-#     print("Testing DeepONet for NOs4POs")
-#     print("=" * 70)
+if __name__ == "__main__":
+    print("=" * 70)
+    print("Testing DeepONet for NOs4POs")
+    print("=" * 70)
     
-#     # Setup
-#     disc = 64
-#     x = torch.linspace(0, 1, disc)
-#     y = torch.linspace(0, 1, disc)
-#     batch_size = 4
+    # Setup
+    disc = 64
+    x = torch.linspace(0, 1, disc)
+    y = torch.linspace(0, 1, disc)
+    batch_size = 4
     
-#     # Test DeepONet
-#     print("\n" + "=" * 70)
-#     print("DeepONet Model")
-#     print("=" * 70)
-#     deeponet = DeepONet(
-#         in_channels=2,
-#         out_channels=2,
-#         branch_width=128,
-#         trunk_width=128,
-#         branch_depth=4,
-#         trunk_depth=4,
-#         x_in=x,
-#         y_in=y,
-#         basis_size=100
-#     )
+    # Test DeepONet (Structured)
+    print("\n" + "=" * 70)
+    print("DeepONet Model (Structured Grid)")
+    print("=" * 70)
+    deeponet = DeepONet(
+        in_channels=2,
+        out_channels=2,
+        branch_width=128,
+        trunk_width=128,
+        branch_depth=4,
+        trunk_depth=4,
+        grid_type='structured',
+        x_in=x,
+        y_in=y,
+        basis_size=100
+    )
     
-#     print(f"Input grid shape: {deeponet.input_spatial_shape}")
-#     print(f"Output grid shape: {deeponet.output_spatial_shape}")
-#     print(f"Parameters: {deeponet.count_params():,}")
-#     print(f"Basis size: 100")
+    print(f"Grid type: {deeponet.model.grid_type}")
+    print(f"Input grid shape: {deeponet.input_spatial_shape}")
+    print(f"Output grid shape: {deeponet.output_spatial_shape}")
+    print(f"Parameters: {deeponet.count_params():,}")
+    print(f"Basis size: 100")
     
-#     # Create test input
-#     xx, yy = torch.meshgrid(x, y, indexing='ij')
-#     u = torch.zeros(batch_size, 2, disc, disc)
-#     u[:, 0] = torch.sin(2 * np.pi * xx).unsqueeze(0)
-#     u[:, 1] = torch.cos(2 * np.pi * yy).unsqueeze(0)
-#     u = u.unsqueeze(-1)
+    # Create test input
+    xx, yy = torch.meshgrid(x, y, indexing='ij')
+    u = torch.zeros(batch_size, 2, disc, disc)
+    u[:, 0] = torch.sin(2 * np.pi * xx).unsqueeze(0)
+    u[:, 1] = torch.cos(2 * np.pi * yy).unsqueeze(0)
+    u = u.unsqueeze(-1)
     
-#     print(f"Input shape: {u.shape}")
+    print(f"Input shape: {u.shape}")
     
-#     # Forward pass
-#     import time
-#     start = time.time()
-#     output = deeponet(u)
-#     end = time.time()
+    # Forward pass
+    import time
+    start = time.time()
+    output = deeponet(u)
+    end = time.time()
     
-#     print(f"Output shape: {output.shape}")
-#     print(f"Forward pass time: {(end - start) * 1000:.2f} ms")
+    print(f"Output shape: {output.shape}")
+    print(f"Forward pass time: {(end - start) * 1000:.2f} ms")
     
-#     # Verify shapes match
-#     assert output.shape == u.shape, f"Shape mismatch: {output.shape} vs {u.shape}"
-#     print("\n✓ All tests passed! DeepONet is compatible with NOs4POs")
-#     print("=" * 70)
+    # Verify shapes match
+    assert output.shape == u.shape, f"Shape mismatch: {output.shape} vs {u.shape}"
+    print("\n✓ Structured grid test passed! DeepONet is compatible.")
+    print("=" * 70)
     
-#     # Parameter breakdown
-#     print("\n" + "=" * 70)
-#     print("Parameter Breakdown")
-#     print("=" * 70)
-#     branch_params = sum(p.numel() for p in deeponet.model.deeponets[0].branch.parameters())
-#     trunk_params = sum(p.numel() for p in deeponet.model.deeponets[0].trunk.parameters())
-#     print(f"Branch network (per channel): {branch_params:,}")
-#     print(f"Trunk network (per channel): {trunk_params:,}")
-#     print(f"Total (2 output channels): {deeponet.count_params():,}")
-#     print("=" * 70)
-# # %%
+    # Test DeepONet (Unstructured)
+    print("\n" + "=" * 70)
+    print("DeepONet Model (Unstructured Grid / Point Cloud)")
+    print("=" * 70)
+    
+    N_points = 1024
+    x_un = torch.rand(N_points)
+    y_un = torch.rand(N_points)
+    
+    deeponet_un = DeepONet(
+        in_channels=2,
+        out_channels=2,
+        branch_width=128,
+        trunk_width=128,
+        branch_depth=4,
+        trunk_depth=4,
+        grid_type='unstructured',
+        x_in=x_un,
+        y_in=y_un,
+        basis_size=100
+    )
+    
+    print(f"Grid type: {deeponet_un.model.grid_type}")
+    print(f"Input 'grid' shape (N,): {deeponet_un.input_spatial_shape}")
+    print(f"Output 'grid' shape (N,): {deeponet_un.output_spatial_shape}")
+    print(f"Total points (N): {deeponet_un.model.N}")
+    print(f"Parameters: {deeponet_un.count_params():,}")
+    
+    # Create test input
+    u_un = torch.rand(batch_size, 2, N_points, 1)
+    print(f"Input shape: {u_un.shape}")
+    
+    # Forward pass
+    start = time.time()
+    output_un = deeponet_un(u_un)
+    end = time.time()
+    
+    print(f"Output shape: {output_un.shape}")
+    print(f"Forward pass time: {(end - start) * 1000:.2f} ms")
+    
+    # Verify shapes match
+    expected_shape = (batch_size, 2, N_points, 1)
+    assert output_un.shape == expected_shape, \
+        f"Shape mismatch: {output_un.shape} vs {expected_shape}"
+    print("\n✓ Unstructured grid test passed! DeepONet is compatible.")
+    print("=" * 70)
+# %%
