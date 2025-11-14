@@ -9,6 +9,8 @@ This implementation:
 2. Pre-computes and stores graph edges as model buffers (no recomputation in forward pass)
 3. Implements efficient batching using PyG-style graph batching
 4. Compatible with the model_setup structure in NOs4POs
+5. Handles both structured [B, C, Nx, Ny] and unstructured [B, C, N] grids
+   via an explicit `grid_type` parameter.
 """
 # %% 
 import torch
@@ -36,14 +38,28 @@ class GNO(nn.Module):
         Radius for neighbor search in graph construction
     n_layers : int
         Number of GNO layers (depth)
+    grid_type : str, optional
+        'structured' (default): Input data is on a regular grid.
+            `x_in` and `y_in` are 1D vectors defining the grid axes.
+            Input shape: [B, C, Nx, Ny, 1]
+        'unstructured': Input data is a point cloud.
+            `x_in` and `y_in` must be 1D vectors of length N 
+            specifying the coordinates of each point.
+            Input shape: [B, C, N, 1]
     x_in : torch.Tensor
-        Input x-coordinates (1D tensor)
+        - If grid_type='structured': 1D tensor of x-coordinates (len Nx).
+          If None, defaults to linspace(0, 1, 32).
+        - If grid_type='unstructured': 1D tensor of x-coordinates (len N).
+          Must be provided.
     y_in : torch.Tensor
-        Input y-coordinates (1D tensor)
+        - If grid_type='structured': 1D tensor of y-coordinates (len Ny).
+          If None, defaults to linspace(0, 1, 32).
+        - If grid_type='unstructured': 1D tensor of y-coordinates (len N).
+          Must be provided.
     x_out : torch.Tensor, optional
-        Output x-coordinates (defaults to x_in for same-grid case)
+        Output coordinates (defaults to x_in for same-grid case)
     y_out : torch.Tensor, optional
-        Output y-coordinates (defaults to y_in for same-grid case)
+        Output coordinates (defaults to y_in for same-grid case)
     gno_transform_type : str
         Type of kernel integral transform ('linear', 'nonlinear', etc.)
     gno_use_open3d : bool
@@ -59,6 +75,7 @@ class GNO(nn.Module):
         hidden_channels=32,
         r=0.033,
         n_layers=4,
+        grid_type='structured', # 'structured' or 'unstructured'
         x_in=None,
         y_in=None,
         x_out=None,
@@ -76,33 +93,56 @@ class GNO(nn.Module):
         self.out_channels = out_channels
         self.hidden_channels = hidden_channels
         self.n_layers = n_layers
+        self.grid_type = grid_type
         
-        # Handle radius parameter (can be passed as r or gno_radius)
+        # Handle radius parameter
         self.r = gno_radius if gno_radius is not None else r
         
-        # Default grid setup
-        if x_in is None:
-            x_in = torch.linspace(0, 1, 32)
-        if y_in is None:
-            y_in = torch.linspace(0, 1, 32)
-        if x_out is None:
-            x_out = x_in
-        if y_out is None:
-            y_out = y_in
+        # --- Coordinate and Grid Setup ---
+        
+        # Validate and set default coordinates based on grid type
+        if grid_type == 'structured':
+            if x_in is None: x_in = torch.linspace(0, 1, 32)
+            if y_in is None: y_in = torch.linspace(0, 1, 32)
+            if x_out is None: x_out = x_in
+            if y_out is None: y_out = y_in
+        elif grid_type == 'unstructured':
+            if x_in is None or y_in is None:
+                raise ValueError("x_in and y_in must be provided "
+                                 "for 'unstructured' grid_type")
+            if x_out is None: x_out = x_in
+            if y_out is None: y_out = y_in
+        else:
+            raise ValueError(f"Unknown grid_type: '{grid_type}'. "
+                             "Must be 'structured' or 'unstructured'.")
         
         # Register coordinate tensors as buffers
         self.register_buffer('x_in', x_in if isinstance(x_in, torch.Tensor) else torch.tensor(x_in, dtype=torch.float32))
         self.register_buffer('y_in', y_in if isinstance(y_in, torch.Tensor) else torch.tensor(y_in, dtype=torch.float32))
         self.register_buffer('x_out', x_out if isinstance(x_out, torch.Tensor) else torch.tensor(x_out, dtype=torch.float32))
         self.register_buffer('y_out', y_out if isinstance(y_out, torch.Tensor) else torch.tensor(y_out, dtype=torch.float32))
-        
-        # Create coordinate grids
-        xx_in, yy_in = torch.meshgrid(self.x_in, self.y_in, indexing='ij')
-        coords_in = torch.stack([xx_in.flatten(), yy_in.flatten()], dim=-1)
-        
-        xx_out, yy_out = torch.meshgrid(self.x_out, self.y_out, indexing='ij')
-        coords_out = torch.stack([xx_out.flatten(), yy_out.flatten()], dim=-1)
-        
+
+        # Create coordinate grids and spatial shapes
+        if self.grid_type == 'structured':
+            xx_in, yy_in = torch.meshgrid(self.x_in, self.y_in, indexing='ij')
+            coords_in = torch.stack([xx_in.flatten(), yy_in.flatten()], dim=-1)
+            
+            xx_out, yy_out = torch.meshgrid(self.x_out, self.y_out, indexing='ij')
+            coords_out = torch.stack([xx_out.flatten(), yy_out.flatten()], dim=-1)
+            
+            self.input_spatial_shape = (len(self.x_in), len(self.y_in))
+            self.output_spatial_shape = (len(self.x_out), len(self.y_out))
+            
+        elif self.grid_type == 'unstructured':
+            assert len(self.x_in) == len(self.y_in), "x_in/y_in length mismatch"
+            assert len(self.x_out) == len(self.y_out), "x_out/y_out length mismatch"
+            
+            coords_in = torch.stack([self.x_in, self.y_in], dim=-1)
+            coords_out = torch.stack([self.x_out, self.y_out], dim=-1)
+            
+            self.input_spatial_shape = (len(self.x_in),)
+            self.output_spatial_shape = (len(self.x_out),)
+
         # Register coordinates as buffers
         self.register_buffer('coords_in', coords_in)
         self.register_buffer('coords_out', coords_out)
@@ -112,11 +152,10 @@ class GNO(nn.Module):
         self.N_out = coords_out.shape[0]
         self.same_grid = torch.allclose(coords_in, coords_out) if self.N_in == self.N_out else False
         
-        self.input_spatial_shape = (len(self.x_in), len(self.y_in))
-        self.output_spatial_shape = (len(self.x_out), len(self.y_out))
+        # --- Model Architecture ---
         
         # Pre-compute and store graph structure as buffers
-        # This is the key optimization - graph is built once during initialization
+        # Note: This is stored but GNOBlock may redo neighbor search internally
         in_neighbors, out_neighbors = self._build_neighbor_lists()
         self.register_buffer('in_neighbors', in_neighbors)
         self.register_buffer('out_neighbors', out_neighbors)
@@ -126,6 +165,8 @@ class GNO(nn.Module):
         
         # Create neuralop GNOBlock layers
         self.gno_layers = nn.ModuleList()
+        self.norm_layers = nn.ModuleList()  
+        
         for _ in range(n_layers):
             self.gno_layers.append(
                 GNOBlock(
@@ -138,7 +179,7 @@ class GNO(nn.Module):
                     use_torch_scatter_reduce=gno_use_torch_scatter,
                 )
             )
-        
+            self.norm_layers.append(nn.LayerNorm(hidden_channels)) 
         # Projection layer: maps hidden features to output dimension
         self.projection = nn.Linear(hidden_channels, out_channels)
         
@@ -185,23 +226,34 @@ class GNO(nn.Module):
         Parameters
         ----------
         u : torch.Tensor
-            Input tensor of shape (batch_size, in_channels, N_x, N_y, 1) or
-            (batch_size, in_channels, N_x, N_y)
+            - If structured: (B, C_in, N_x, N_y, 1) or (B, C_in, N_x, N_y)
+            - If unstructured: (B, C_in, N, 1) or (B, C_in, N)
         
         Returns
         -------
         output : torch.Tensor
-            Output tensor of shape (batch_size, out_channels, N_x_out, N_y_out, 1)
+            - If structured: (B, C_out, N_x_out, N_y_out, 1)
+            - If unstructured: (B, C_out, N_out, 1)
         """
-        # Handle 5D input by removing last dimension
-        if u.dim() == 5:
-            u = u[..., 0]
+        # Handle trailing time dimension
+        # ** THIS IS THE FIX **
+        if u.shape[-1] == 1:
+            u = u.squeeze(-1)
         
-        batch_size, channels, N_x, N_y = u.shape
+        batch_size = u.shape[0]
         
+        # --- Input Pre-processing ---
         # Reshape to node features: [B, N, C]
-        # Permute from (B, C, N_x, N_y) to (B, N_x, N_y, C) then flatten spatial dims
-        u_in = u.permute(0, 2, 3, 1).reshape(batch_size, -1, self.in_channels)
+        if self.grid_type == 'structured':
+            # u is (B, C, N_x, N_y)
+            # Permute from (B, C, N_x, N_y) to (B, N_x, N_y, C)
+            # Then flatten spatial dims -> (B, N_x*N_y, C)
+            u_in = u.permute(0, 2, 3, 1).reshape(batch_size, -1, self.in_channels)
+        elif self.grid_type == 'unstructured':
+            # u is (B, C, N), permute to (B, N, C)
+            u_in = u.permute(0, 2, 1)
+
+        # --- GNO Processing ---
         
         if not self.same_grid:
             # Different grid case: need to handle input and output nodes separately
@@ -215,9 +267,6 @@ class GNO(nn.Module):
                 x = x_lifted
                 for gno_layer in self.gno_layers:
                     # neuralop GNOBlock signature: forward(y, x, f_y=None)
-                    # y: input geometry [N_in, coord_dim]
-                    # x: output queries [N_out, coord_dim]  
-                    # f_y: features at y [N_in, channels]
                     x = gno_layer(
                         y=self.coords_in,  # Input geometry
                         x=self.coords_out,  # Output queries
@@ -240,8 +289,6 @@ class GNO(nn.Module):
             x = x_lifted
             for gno_layer in self.gno_layers:
                 # neuralop GNOBlock signature: forward(y, x, f_y=None)
-                # For same grid: y=x=coords_in, f_y=features
-                # Since we're batching, f_y has shape [B, N, hidden]
                 x = gno_layer(
                     y=self.coords_in,  # Input geometry [N_in, 2]
                     x=self.coords_in,  # Output queries (same as input) [N_in, 2]
@@ -250,16 +297,26 @@ class GNO(nn.Module):
                 x = self.activation(x)
             
             # Project to output dimension [B, N, hidden] -> [B, N, out_channels]
-            u_final = self.projection(x)
+            u_final = self.projection(x) # [B, N_out, out_channels]
         
-        # Reshape output to grid format
-        output_shape = (batch_size, *self.output_spatial_shape, self.out_channels)
-        u_out = u_final.reshape(*output_shape)
+        # --- Output Post-processing ---
         
-        # Permute back to (B, C, H, W) and add extra dim for compatibility
-        # From (B, H, W, C) to (B, C, H, W, 1)
-        output = u_out.permute(0, 3, 1, 2).unsqueeze(-1)
+        if self.grid_type == 'structured':
+            # Reshape output to grid format
+            output_shape = (batch_size, *self.output_spatial_shape, self.out_channels)
+            u_out = u_final.reshape(*output_shape)
+            
+            # Permute back to (B, C, H, W) and add extra dim for compatibility
+            # From (B, H, W, C) to (B, C, H, W, 1)
+            output = u_out.permute(0, 3, 1, 2).unsqueeze(-1)
         
+        elif self.grid_type == 'unstructured':
+            # u_final is already [B, N_out, C_out]
+            # Permute to (B, C_out, N_out)
+            u_out = u_final.permute(0, 2, 1)
+            # Add extra dim -> (B, C_out, N_out, 1)
+            output = u_out.unsqueeze(-1)
+            
         return output
     
     def count_params(self):
@@ -268,7 +325,8 @@ class GNO(nn.Module):
     
     def extra_repr(self):
         """Extra information to print about the model."""
-        return (f'in_channels={self.in_channels}, out_channels={self.out_channels}, '
+        return (f'grid_type={self.grid_type}, '
+                f'in_channels={self.in_channels}, out_channels={self.out_channels}, '
                 f'hidden_channels={self.hidden_channels}, n_layers={self.n_layers}, '
                 f'radius={self.r:.4f}, same_grid={self.same_grid}, '
                 f'input_shape={self.input_spatial_shape}, output_shape={self.output_spatial_shape}, '
@@ -278,68 +336,101 @@ class GNO(nn.Module):
 # # Example usage and testing
 # if __name__ == "__main__":
 #     import numpy as np
+#     import time
     
-#     # Create a simple test case
-#     disc = 64
-#     x = torch.linspace(0, 1, disc)
-#     y = torch.linspace(0, 1, disc)
+#     # --- Structured Grid Test ---
+    
+#     disc = 32
+#     x_s = torch.linspace(0, 1, disc)
+#     y_s = torch.linspace(0, 1, disc)
+#     batch_size = 4
     
 #     # Initialize model
-#     model = GNO(
+#     model_s = GNO(
 #         in_channels=2,
 #         out_channels=2,
 #         hidden_channels=32,
 #         r=0.05,
 #         n_layers=2,
-#         x_in=x,
-#         y_in=y
+#         grid_type='structured',
+#         x_in=x_s,
+#         y_in=y_s
 #     )
     
 #     print("=" * 70)
-#     print("GNO Model using neuralop library")
+#     print("GNO Model Test (Structured Grid)")
 #     print("=" * 70)
-#     print(f"Input grid shape: {model.input_spatial_shape}")
-#     print(f"Output grid shape: {model.output_spatial_shape}")
-#     print(f"Total nodes (N_in): {model.N_in:,}")
-#     print(f"Radius: {model.r}")
-#     print(f"Same grid: {model.same_grid}")
-#     print(f"Parameters: {model.count_params():,}")
+#     print(model_s)
+#     print(f"Parameters: {model_s.count_params():,}")
 #     print("=" * 70)
     
 #     # Create test input
-#     batch_size = 4
-#     xx, yy = torch.meshgrid(x, y, indexing='ij')
-#     u = torch.zeros(batch_size, 2, disc, disc)
-#     u[:, 0] = torch.sin(2 * np.pi * xx).unsqueeze(0)
-#     u[:, 1] = torch.cos(2 * np.pi * yy).unsqueeze(0)
-#     u = u.unsqueeze(-1)
+#     xx, yy = torch.meshgrid(x_s, y_s, indexing='ij')
+#     u_s = torch.zeros(batch_size, 2, disc, disc)
+#     u_s[:, 0] = torch.sin(2 * np.pi * xx).unsqueeze(0)
+#     u_s[:, 1] = torch.cos(2 * np.pi * yy).unsqueeze(0)
+#     u_s = u_s.unsqueeze(-1) # [B, C, Nx, Ny, 1]
     
-#     print(f"Input shape: {u.shape}")
+#     print(f"Input shape (structured): {u_s.shape}")
     
 #     # Move to GPU if available
 #     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 #     print(f"Device: {device}")
-#     model = model.to(device)
-#     u = u.to(device)
-    
-#     # Warm-up pass
-#     if device == 'cuda':
-#         _ = model(u)
-#         torch.cuda.synchronize()
+#     model_s = model_s.to(device)
+#     u_s = u_s.to(device)
     
 #     # Timed forward pass
-#     import time
 #     start = time.time()
-    
-#     output = model(u)
-    
-#     if device == 'cuda':
-#         torch.cuda.synchronize()
-    
+#     output_s = model_s(u_s)
 #     end = time.time()
     
-#     print(f"Output shape: {output.shape}")
+#     print(f"Output shape (structured): {output_s.shape}")
 #     print(f"Forward pass time: {(end - start) * 1000:.2f} ms")
-#     print(f"Memory allocated: {torch.cuda.memory_allocated() / 1024**2:.2f} MB" if device == 'cuda' else "CPU mode")
+#     assert output_s.shape == u_s.shape
+#     print("\n✓ Structured grid test passed!")
+#     print("=" * 70)
+
+#     # --- Unstructured Grid Test ---
+    
+#     N_points = 1024
+#     x_un = torch.rand(N_points)
+#     y_un = torch.rand(N_points)
+
+#     # Initialize model
+#     model_un = GNO(
+#         in_channels=2,
+#         out_channels=2,
+#         hidden_channels=32,
+#         r=0.05,
+#         n_layers=2,
+#         grid_type='unstructured',
+#         x_in=x_un,
+#         y_in=y_un
+#     )
+    
+#     print("\n" + "=" * 70)
+#     print("GNO Model Test (Unstructured Grid)")
+#     print("=" * 70)
+#     print(model_un)
+#     print(f"Parameters: {model_un.count_params():,}")
+#     print("=" * 70)
+
+#     # Create test input
+#     u_un = torch.rand(batch_size, 2, N_points, 1) # [B, C, N, 1]
+    
+#     print(f"Input shape (unstructured): {u_un.shape}")
+    
+#     model_un = model_un.to(device)
+#     u_un = u_un.to(device)
+    
+#     # Timed forward pass
+#     start = time.time()
+#     output_un = model_un(u_un)
+#     end = time.time()
+
+#     print(f"Output shape (unstructured): {output_un.shape}")
+#     print(f"Forward pass time: {(end - start) * 1000:.2f} ms")
+#     assert output_un.shape == u_un.shape
+#     print("\n✓ Unstructured grid test passed!")
 #     print("=" * 70)
 # # %%

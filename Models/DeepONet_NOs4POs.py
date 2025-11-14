@@ -397,6 +397,7 @@ class DeepONet(nn.Module):
         )
     
     def forward(self, u):
+        u = u[0]
         return self.model(u)
     
     def count_params(self):
@@ -411,111 +412,111 @@ class DeepONet(nn.Module):
         return self.model.output_spatial_shape
 
 
-# ============================================================================
-# Testing and Examples
-# ============================================================================
+# # ============================================================================
+# # Testing and Examples
+# # ============================================================================
 
-if __name__ == "__main__":
-    print("=" * 70)
-    print("Testing DeepONet for NOs4POs")
-    print("=" * 70)
+# if __name__ == "__main__":
+#     print("=" * 70)
+#     print("Testing DeepONet for NOs4POs")
+#     print("=" * 70)
     
-    # Setup
-    disc = 64
-    x = torch.linspace(0, 1, disc)
-    y = torch.linspace(0, 1, disc)
-    batch_size = 4
+#     # Setup
+#     disc = 64
+#     x = torch.linspace(0, 1, disc)
+#     y = torch.linspace(0, 1, disc)
+#     batch_size = 4
     
-    # Test DeepONet (Structured)
-    print("\n" + "=" * 70)
-    print("DeepONet Model (Structured Grid)")
-    print("=" * 70)
-    deeponet = DeepONet(
-        in_channels=2,
-        out_channels=2,
-        branch_width=128,
-        trunk_width=128,
-        branch_depth=4,
-        trunk_depth=4,
-        grid_type='structured',
-        x_in=x,
-        y_in=y,
-        basis_size=100
-    )
+#     # Test DeepONet (Structured)
+#     print("\n" + "=" * 70)
+#     print("DeepONet Model (Structured Grid)")
+#     print("=" * 70)
+#     deeponet = DeepONet(
+#         in_channels=2,
+#         out_channels=2,
+#         branch_width=128,
+#         trunk_width=128,
+#         branch_depth=4,
+#         trunk_depth=4,
+#         grid_type='structured',
+#         x_in=x,
+#         y_in=y,
+#         basis_size=100
+#     )
     
-    print(f"Grid type: {deeponet.model.grid_type}")
-    print(f"Input grid shape: {deeponet.input_spatial_shape}")
-    print(f"Output grid shape: {deeponet.output_spatial_shape}")
-    print(f"Parameters: {deeponet.count_params():,}")
-    print(f"Basis size: 100")
+#     print(f"Grid type: {deeponet.model.grid_type}")
+#     print(f"Input grid shape: {deeponet.input_spatial_shape}")
+#     print(f"Output grid shape: {deeponet.output_spatial_shape}")
+#     print(f"Parameters: {deeponet.count_params():,}")
+#     print(f"Basis size: 100")
     
-    # Create test input
-    xx, yy = torch.meshgrid(x, y, indexing='ij')
-    u = torch.zeros(batch_size, 2, disc, disc)
-    u[:, 0] = torch.sin(2 * np.pi * xx).unsqueeze(0)
-    u[:, 1] = torch.cos(2 * np.pi * yy).unsqueeze(0)
-    u = u.unsqueeze(-1)
+#     # Create test input
+#     xx, yy = torch.meshgrid(x, y, indexing='ij')
+#     u = torch.zeros(batch_size, 2, disc, disc)
+#     u[:, 0] = torch.sin(2 * np.pi * xx).unsqueeze(0)
+#     u[:, 1] = torch.cos(2 * np.pi * yy).unsqueeze(0)
+#     u = u.unsqueeze(-1)
     
-    print(f"Input shape: {u.shape}")
+#     print(f"Input shape: {u.shape}")
     
-    # Forward pass
-    import time
-    start = time.time()
-    output = deeponet(u)
-    end = time.time()
+#     # Forward pass
+#     import time
+#     start = time.time()
+#     output = deeponet(u)
+#     end = time.time()
     
-    print(f"Output shape: {output.shape}")
-    print(f"Forward pass time: {(end - start) * 1000:.2f} ms")
+#     print(f"Output shape: {output.shape}")
+#     print(f"Forward pass time: {(end - start) * 1000:.2f} ms")
     
-    # Verify shapes match
-    assert output.shape == u.shape, f"Shape mismatch: {output.shape} vs {u.shape}"
-    print("\n✓ Structured grid test passed! DeepONet is compatible.")
-    print("=" * 70)
+#     # Verify shapes match
+#     assert output.shape == u.shape, f"Shape mismatch: {output.shape} vs {u.shape}"
+#     print("\n✓ Structured grid test passed! DeepONet is compatible.")
+#     print("=" * 70)
     
-    # Test DeepONet (Unstructured)
-    print("\n" + "=" * 70)
-    print("DeepONet Model (Unstructured Grid / Point Cloud)")
-    print("=" * 70)
+#     # Test DeepONet (Unstructured)
+#     print("\n" + "=" * 70)
+#     print("DeepONet Model (Unstructured Grid / Point Cloud)")
+#     print("=" * 70)
     
-    N_points = 1024
-    x_un = torch.rand(N_points)
-    y_un = torch.rand(N_points)
+#     N_points = 1024
+#     x_un = torch.rand(N_points)
+#     y_un = torch.rand(N_points)
     
-    deeponet_un = DeepONet(
-        in_channels=2,
-        out_channels=2,
-        branch_width=128,
-        trunk_width=128,
-        branch_depth=4,
-        trunk_depth=4,
-        grid_type='unstructured',
-        x_in=x_un,
-        y_in=y_un,
-        basis_size=100
-    )
+#     deeponet_un = DeepONet(
+#         in_channels=2,
+#         out_channels=2,
+#         branch_width=128,
+#         trunk_width=128,
+#         branch_depth=4,
+#         trunk_depth=4,
+#         grid_type='unstructured',
+#         x_in=x_un,
+#         y_in=y_un,
+#         basis_size=100
+#     )
     
-    print(f"Grid type: {deeponet_un.model.grid_type}")
-    print(f"Input 'grid' shape (N,): {deeponet_un.input_spatial_shape}")
-    print(f"Output 'grid' shape (N,): {deeponet_un.output_spatial_shape}")
-    print(f"Total points (N): {deeponet_un.model.N}")
-    print(f"Parameters: {deeponet_un.count_params():,}")
+#     print(f"Grid type: {deeponet_un.model.grid_type}")
+#     print(f"Input 'grid' shape (N,): {deeponet_un.input_spatial_shape}")
+#     print(f"Output 'grid' shape (N,): {deeponet_un.output_spatial_shape}")
+#     print(f"Total points (N): {deeponet_un.model.N}")
+#     print(f"Parameters: {deeponet_un.count_params():,}")
     
-    # Create test input
-    u_un = torch.rand(batch_size, 2, N_points, 1)
-    print(f"Input shape: {u_un.shape}")
+#     # Create test input
+#     u_un = torch.rand(batch_size, 2, N_points, 1)
+#     print(f"Input shape: {u_un.shape}")
     
-    # Forward pass
-    start = time.time()
-    output_un = deeponet_un(u_un)
-    end = time.time()
+#     # Forward pass
+#     start = time.time()
+#     output_un = deeponet_un(u_un)
+#     end = time.time()
     
-    print(f"Output shape: {output_un.shape}")
-    print(f"Forward pass time: {(end - start) * 1000:.2f} ms")
+#     print(f"Output shape: {output_un.shape}")
+#     print(f"Forward pass time: {(end - start) * 1000:.2f} ms")
     
-    # Verify shapes match
-    expected_shape = (batch_size, 2, N_points, 1)
-    assert output_un.shape == expected_shape, \
-        f"Shape mismatch: {output_un.shape} vs {expected_shape}"
-    print("\n✓ Unstructured grid test passed! DeepONet is compatible.")
-    print("=" * 70)
-# %%
+#     # Verify shapes match
+#     expected_shape = (batch_size, 2, N_points, 1)
+#     assert output_un.shape == expected_shape, \
+#         f"Shape mismatch: {output_un.shape} vs {expected_shape}"
+#     print("\n✓ Unstructured grid test passed! DeepONet is compatible.")
+#     print("=" * 70)
+# # %%

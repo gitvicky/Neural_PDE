@@ -333,7 +333,7 @@ class GINO(nn.Module):
 #     import time
     
 #     # Create a simple test case
-#     disc = 64
+#     disc = 32
 #     x = torch.linspace(0, 1, disc)
 #     y = torch.linspace(0, 1, disc)
     
@@ -341,15 +341,15 @@ class GINO(nn.Module):
 #     model = GINO(
 #         in_channels=2,
 #         out_channels=2,
-#         hidden_channels=32,
-#         fno_n_modes=(12, 12),
-#         fno_n_layers=4,
+#         hidden_channels=16,
+#         fno_n_modes=(8,8),
+#         fno_n_layers=2,
 #         in_gno_radius=0.05,
 #         out_gno_radius=0.05,
 #         n_gno_layers=2,
 #         x_in=x,
 #         y_in=y,
-#         latent_grid_size=32
+#         latent_grid_size=16
 #     )
     
 #     print("=" * 70)

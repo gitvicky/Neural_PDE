@@ -1,12 +1,77 @@
 # %%
 import torch.nn as nn
 import torch
+import math
 
 from einops import rearrange
 from einops.layers.torch import Rearrange
 
-#Inspired from AI for Science Lecture series at ETH Zurich
-# %% 
+# Inspired from AI for Science Lecture series at ETH Zurich
+
+# %%
+class PositionalEncoding(nn.Module):
+    """
+    Positional Encoding module supporting multiple encoding types.
+    
+    Parameters
+    ----------
+    encoding_type : str
+        Type of positional encoding: 'learnable', 'sinusoidal', or 'none'
+    num_patches : int
+        Number of patches (sequence length)
+    embed_dim : int
+        Embedding dimension
+    dropout : float
+        Dropout rate
+    """
+    def __init__(self, encoding_type='learnable', num_patches=None, embed_dim=None, dropout=0.):
+        super().__init__()
+        self.encoding_type = encoding_type
+        self.dropout = nn.Dropout(dropout)
+        
+        if encoding_type == 'learnable':
+            # Learnable positional embeddings (default, as in original code)
+            self.pos_embedding = nn.Parameter(torch.randn(1, num_patches, embed_dim))
+            
+        elif encoding_type == 'sinusoidal':
+            # Sinusoidal positional embeddings (fixed, not learned)
+            pe = torch.zeros(num_patches, embed_dim)
+            position = torch.arange(0, num_patches, dtype=torch.float).unsqueeze(1)
+            div_term = torch.exp(torch.arange(0, embed_dim, 2).float() * (-math.log(10000.0) / embed_dim))
+            
+            pe[:, 0::2] = torch.sin(position * div_term)
+            pe[:, 1::2] = torch.cos(position * div_term)
+            pe = pe.unsqueeze(0)  # Add batch dimension
+            
+            # Register as buffer (not a parameter, won't be updated during training)
+            self.register_buffer('pos_embedding', pe)
+            
+        elif encoding_type == 'none':
+            # No positional encoding
+            self.pos_embedding = None
+            
+        else:
+            raise ValueError(f"Unknown encoding_type: {encoding_type}. Choose from 'learnable', 'sinusoidal', or 'none'.")
+    
+    def forward(self, x):
+        """
+        Add positional encoding to input.
+        
+        Parameters
+        ----------
+        x : torch.Tensor
+            Input tensor of shape (batch, num_patches, embed_dim)
+            
+        Returns
+        -------
+        torch.Tensor
+            Output with positional encoding added
+        """
+        if self.pos_embedding is not None:
+            _, n, _ = x.shape
+            x = x + self.pos_embedding[:, :n]
+        return self.dropout(x)
+
 
 class FeedForward(nn.Module):
     def __init__(self, dim, hidden_dim, dropout = 0.):
@@ -78,7 +143,6 @@ class TransformerBlock(nn.Module):
         return self.norm(x)
 
 
-
 class ViT(nn.Module):
     def __init__(self,
                 image_size,
@@ -90,7 +154,8 @@ class ViT(nn.Module):
                 in_channels = 1,      # Input channels (previously 'channels')
                 out_channels = 1,     # Output channels (new parameter)
                 dim_head = 32,
-                emb_dropout = 0.,):
+                emb_dropout = 0.,
+                pos_encoding_type = 'learnable'):  # New parameter for positional encoding type
         super().__init__()
         image_height, image_width = image_size[0], image_size[1]
         patch_height, patch_width = patch_size[0], patch_size[1]
@@ -129,8 +194,13 @@ class ViT(nn.Module):
                      c = out_channels)
         )
         
-        self.pos_embedding = nn.Parameter(torch.randn(1, num_patches, embed_dim))
-        self.dropout = nn.Dropout(emb_dropout)
+        # Use the new PositionalEncoding module
+        self.pos_encoding = PositionalEncoding(
+            encoding_type=pos_encoding_type,
+            num_patches=num_patches,
+            embed_dim=embed_dim,
+            dropout=emb_dropout
+        )
 
         self.transformer = TransformerBlock(embed_dim, depth, n_heads, dim_head, mlp_dim)
 
@@ -143,26 +213,20 @@ class ViT(nn.Module):
     def forward(self, img):
         img = img[...,0]
         x = self.to_patch_embedding(img)
-        _, n, _ = x.shape
-        x += self.pos_embedding[:, :n]
-        x = self.dropout(x)
+        x = self.pos_encoding(x)  # Apply positional encoding
         x = self.transformer(x)
         x = self.patch_to_image(x)
         x = self.conv_last(x)
         x = torch.unsqueeze(x, dim =-1)
         return x
 
-
     def count_params(self):
         nparams = 0
-
         for param in self.parameters():
             nparams += param.numel()
         return nparams
     
-# %% 
-
-# # Example usage with different input/output channels
+# # %% Example usage with different input/output channels
 # image_size = (64, 64)
 # patch_size = (16, 16)
 # embed_dim = 128
