@@ -96,12 +96,11 @@ class DeepONet(torch.nn.Module):
                 raise AssertionError(
                     "Output sizes of branch net and trunk net do not match."
                 )
-            # x = torch.einsum('ijk,ik->ij', x_loc, x_func)
+            x = torch.einsum('bl,nl->bn', branch_output, trunk_output)
             # x = torch.unsqueeze(x, -1)
-            # # Add bias
-            # x += self.b
-            
-            x = torch.sum(branch_output * trunk_output, dim=-1)
+            # Add bias
+            # x += self.b            
+            # x = torch.sum(branch_output * trunk_output, dim=-1)
 
             return x
 
@@ -112,18 +111,66 @@ class DeepONet(torch.nn.Module):
 
         return c
 # %% 
-#Example Usage
-model = DeepONet(in_branch=100,
-        width_branch=256,
-        layers_branch=4, 
-        out_branch=100,
-        in_trunk=2,
-        width_trunk=256,
-        layers_trunk=4, 
-        out_trunk=100)
+# #Example Usage
+# model = DeepONet(in_branch=100,
+#         width_branch=256,
+#         layers_branch=4, 
+#         out_branch=100,
+#         in_trunk=2,
+#         width_trunk=256,
+#         layers_trunk=4, 
+#         out_trunk=100)
 
-trunk_in = torch.randn(20, 100)
-branch_in = torch.randn(20, 100, 2)
-output = model(trunk_in, branch_in)
-print(output.shape)
+# trunk_in = torch.randn(100, 2)
+# branch_in = torch.randn(20, 100)
+# output = model(branch_in, trunk_in)
+# print(output.shape)
+# %%
+
+class MIONet(torch.nn.Module):
+    def __init__(
+        self, 
+        in_channels,
+        out_channels,
+        trunk_width,
+        trunk_depth, 
+        branch_width,
+        branch_depth,
+        x_in, 
+        y_in
+    ):
+        super().__init__()
+        
+        self.trunk = FNN(input_size=2, output_size=1, width=trunk_width, num_layers=trunk_depth)
+        self.branches = nn.ModuleList([
+            FNN(input_size=in_channels, output_size=1, width=branch_width, num_layers=branch_depth)
+            for _ in range(out_channels)
+            ])
+        self.coords = torch.stack([x_in, y_in], dim=-1)
+
+    def forward(self, X):
+        batch_size = X.shape[0]
+        trunked = self.trunk(self.coords)
+        outputs = []
+        for branch in self.branches:
+            branched = torch.einsum('bpo, po->bp', branch(X), trunked) #Dot product across branch and trunk
+            outputs.append(branched)
+                    
+        output = torch.stack(outputs, dim=1)
+        return output 
+    
+    def count_params(self):
+        """Count the number of trainable parameters in the model."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
+
+# x = torch.linspace(0, 1, 32)
+# y = torch.linspace(0, 1, 32)
+# xx, yy = torch.meshgrid(x, y)
+# x_in, y_in = xx.flatten(), yy.flatten()
+# u_in = torch.randn(20, 1024, 2)
+# model = MIONet(2, 2, 32, 4, 32, 4, x_in, y_in)
+# output = model(u_in)
+# print(output.shape)
+
+
 # %%

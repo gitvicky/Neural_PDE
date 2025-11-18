@@ -235,8 +235,7 @@ class GNO(nn.Module):
             - If structured: (B, C_out, N_x_out, N_y_out, 1)
             - If unstructured: (B, C_out, N_out, 1)
         """
-        # Handle trailing time dimension
-        # ** THIS IS THE FIX **
+        u = u[0] #Adjusting for parameterised input
         if u.shape[-1] == 1:
             u = u.squeeze(-1)
         

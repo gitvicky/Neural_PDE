@@ -38,37 +38,37 @@ class UnitGaussian_Normalizer(object):
         super(UnitGaussian_Normalizer, self).__init__()
 
         # x could be in shape of ntrain*n or ntrain*T*n or ntrain*n*T
-        self.mean = torch.mean(x, 0)
-        self.std = torch.std(x, 0)
+        self.a = torch.mean(x, 0)
+        self.b = torch.std(x, 0)
         self.eps = eps
 
     def encode(self, x):
-        x = (x - self.mean) / (self.std + self.eps)
+        x = (x - self.a) / (self.b + self.eps)
         return x
 
     def decode(self, x, sample_idx=None):
         if sample_idx is None:
-            std = self.std + self.eps  # n
-            mean = self.mean
+            std = self.b + self.eps  # n
+            mean = self.a
         else:
-            if len(self.mean.shape) == len(sample_idx[0].shape):
-                std = self.std[sample_idx] + self.eps  # batch*n
-                mean = self.mean[sample_idx]
-            if len(self.mean.shape) > len(sample_idx[0].shape):
-                std = self.std[:, sample_idx] + self.eps  # T*batch*n
-                mean = self.mean[:, sample_idx]
+            if len(self.a.shape) == len(sample_idx[0].shape):
+                std = self.b[sample_idx] + self.eps  # batch*n
+                mean = self.a[sample_idx]
+            if len(self.a.shape) > len(sample_idx[0].shape):
+                std = self.b[:, sample_idx] + self.eps  # T*batch*n
+                mean = self.a[:, sample_idx]
 
         # x is in shape of batch*n or T*batch*n
         x = (x * std) + mean
         return x
 
     def cuda(self):
-        self.mean = self.mean.cuda()
-        self.std = self.std.cuda()
+        self.a = self.a.cuda()
+        self.b = self.b.cuda()
 
     def cpu(self):
-        self.mean = self.mean.cpu()
-        self.std = self.std.cpu()
+        self.a = self.a.cpu()
+        self.b = self.b.cpu()
 
 
 # normalization, Gaussian
@@ -76,25 +76,25 @@ class Gaussian_Normalizer(object):
     def __init__(self, x, eps=0.01):
         super(Gaussian_Normalizer, self).__init__()
 
-        self.mean = torch.mean(x)
-        self.std = torch.std(x)
+        self.a = torch.mean(x) #mean
+        self.b = torch.std(x) #std
         self.eps = eps
 
     def encode(self, x):
-        x = (x - self.mean) / (self.std + self.eps)
+        x = (x - self.a) / (self.b + self.eps)
         return x
 
     def decode(self, x, sample_idx=None):
-        x = (x * (self.std + self.eps)) + self.mean
+        x = (x * (self.b + self.eps)) + self.a
         return x
 
     def cuda(self):
-        self.mean = self.mean.cuda()
-        self.std = self.std.cuda()
+        self.a = self.a.cuda()
+        self.b = self.b.cuda()
 
     def cpu(self):
-        self.mean = self.mean.cpu()
-        self.std = self.std.cpu()
+        self.a = self.a.cpu()
+        self.b = self.b.cpu()
 
 
 # normalization, scaling by range

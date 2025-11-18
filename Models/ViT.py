@@ -155,7 +155,7 @@ class ViT(nn.Module):
                 out_channels = 1,     # Output channels (new parameter)
                 dim_head = 32,
                 emb_dropout = 0.,
-                pos_encoding_type = 'learnable'):  # New parameter for positional encoding type
+                pos_encoding_type = 'sinusoidal'):  # New parameter for positional encoding type
         super().__init__()
         image_height, image_width = image_size[0], image_size[1]
         patch_height, patch_width = patch_size[0], patch_size[1]
