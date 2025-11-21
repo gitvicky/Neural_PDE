@@ -103,9 +103,9 @@ class GNO(nn.Module):
         
         # Set up grids
         if x_in is None:
-            x_in = torch.linspace(0, 1, 32)
+            raise ValueError("x_in needs to be specified")
         if y_in is None:
-            y_in = torch.linspace(0, 1, 32)
+            raise ValueError("x_in needs to be specified")
         if x_out is None:
             x_out = x_in
         if y_out is None:

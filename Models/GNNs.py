@@ -342,4 +342,5 @@ model = GNO(in_channel=1, width=32, mid_width=64, out_channel=1, r=0.1)
 out = model(u_in, x_in, x_out)
 print(f'Input shape: {u_in.shape, x_in.shape, x_out.shape}, Output shape: {out.shape}')
 
+
 # %%
