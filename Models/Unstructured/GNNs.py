@@ -162,7 +162,6 @@ class NNConvNet(nn.Module):
                 x = F.relu(x)
         return x
     
-
  
 # #Example Usage
 # x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
@@ -320,27 +319,28 @@ class GNO(nn.Module):
         return u_out
 
  
-# #Example Usage
-# #Input Grid
-# x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
-# xx, yy = np.meshgrid(x, y)
-# x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
-# x_in = torch.tensor(x_in, dtype=torch.float32)
-# x_in = x_in.unsqueeze(0)
-# u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
-# u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
-# u_in = u_in.reshape(u_in.shape[0], -1, 1)
-# u_in = torch.tensor(u_in, dtype=torch.float32)
+#Example Usage
+#Input Grid
+x, y = np.linspace(0, 1, 32), np.linspace(0, 1, 32)#x-y discretisation
+xx, yy = np.meshgrid(x, y)
+x_in = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+x_in = torch.tensor(x_in, dtype=torch.float32)
+x_in = x_in.unsqueeze(0)
+u_in = np.sin(xx) + np.cos(yy)#Arbitrary node features
+u_in = np.expand_dims(u_in, 0)#Adding an additional dimension for time. 
+u_in = u_in.reshape(u_in.shape[0], -1, 1)
+u_in = torch.tensor(u_in, dtype=torch.float32)
 
-# #Output Grid
-# x, y = np.linspace(0, 1, 64), np.linspace(0, 1, 64)#x-y discretisation
-# xx, yy = np.meshgrid(x, y)
-# x_out = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
-# x_out = torch.tensor(x_out, dtype=torch.float32)
-# x_out = x_out.unsqueeze(0)
+#Output Grid
+x, y = np.linspace(0, 1, 64), np.linspace(0, 1, 64)#x-y discretisation
+xx, yy = np.meshgrid(x, y)
+x_out = np.stack((xx.flatten(), yy.flatten())).T #Nodes, x-y pos. 
+x_out = torch.tensor(x_out, dtype=torch.float32)
+x_out = x_out.unsqueeze(0)
 
-# model = GNO(in_channel=1, width=32, mid_width=64, out_channel=1, r=0.1)
-# out = model(u_in, x_in, x_out)
-# print(f'Input shape: {u_in.shape, x_in.shape, x_out.shape}, Output shape: {out.shape}')
+model = GNO(in_channel=1, width=32, mid_width=64, out_channel=1, r=0.1)
+out = model(u_in, x_in, x_out)
+print(f'Input shape: {u_in.shape, x_in.shape, x_out.shape}, Output shape: {out.shape}')
+
 
 # %%

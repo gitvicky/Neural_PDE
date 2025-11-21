@@ -16,7 +16,7 @@ from torch import nn
 
 
 class gMLPBlock(nn.Module):
-    """
+    r"""
     ## gMLP Block
 
     Each block does the following transformations to input embeddings
@@ -34,14 +34,14 @@ class gMLPBlock(nn.Module):
     Output dimensionality of $s(\cdot)$ will be half of $Z$.
     $\sigma$ is an activation function such as
     [GeLU](https://pytorch.org/docs/stable/generated/torch.nn.GELU.html).
-    """
 
+    """
     def __init__(self, d_in: int, d_ffn: int, Nx: int, Ny: int, norm='LayerNorm'):
         """
-        * `d_in` is the dimensionality ($d$) of $X$
-        * `d_ffn` is the dimensionality of $Z$
-        * `Nx` is the length of discretisation along x-axis
-        * `Ny` is the length of discretisation along y-axis
+        * d_in is the dimensionality ($d$) of $X$
+        * d_ffn is the dimensionality of $Z$
+        * Nx is the length of discretisation along x-axis
+        * Ny is the length of discretisation along y-axis
 
         """
         super().__init__()
@@ -65,8 +65,8 @@ class gMLPBlock(nn.Module):
 
     def forward(self, x: torch.Tensor):
         """
-        * `x` is the input embedding tensor $X$ of shape `[seq_len, batch_size, d_model]`
-        * `mask` is a boolean mask of shape `[seq_len, seq_len, 1]` that controls the visibility of tokens
+        * x is the input embedding tensor $X$ of shape [seq_len, batch_size, d_model]
+        * mask is a boolean mask of shape [seq_len, seq_len, 1] that controls the visibility of tokens
          among each other.
         """
         # Keep a copy for shortcut connection
@@ -85,7 +85,7 @@ class gMLPBlock(nn.Module):
 
 
 class SpacialGatingUnit(nn.Module):
-    """
+    r"""
     ## Spatial Gating Unit
 
     $$s(Z) = Z_1 \odot f_{W,b}(Z_2)$$
@@ -96,8 +96,8 @@ class SpacialGatingUnit(nn.Module):
     """
     def __init__(self, d_z: int, Nx: int, Ny: int, norm='LayerNorm'):
         """
-        * `d_z` is the dimensionality of $Z$
-        * `seq_len` is the sequence length
+        * d_z is the dimensionality of $Z$
+        * seq_len is the sequence length
         """
         super().__init__()
         if norm == 'LayerNorm':
@@ -126,7 +126,7 @@ class SpacialGatingUnit(nn.Module):
         # Normalize $Z_2$ before $f_{W,b}(\cdot)$
         z2 = self.norm(z2)
 
-        # # Get the weight matrix; truncate if larger than `seq_len`
+        # # Get the weight matrix; truncate if larger than seq_len
         # weight_x = self.weight_x[:seq_len, :seq_len]
         # weight_y = self.weight_y[:seq_len, :seq_len]
 
@@ -144,11 +144,11 @@ class SpacialGatingUnit(nn.Module):
 class gMLP(nn.Module):
     def __init__(self, n_blocks: int, d_in: int, d_ffn: int, Nx: int, Ny: int):
         """
-        * `n_blocks` is the number of gmLP blocks
-        * `d_in` is the dimensionality ($d$) of $X$
-        * `d_ffn` is the dimensionality of $Z$
-        * `Nx` is the length of discretisation along x-axis
-        * `Ny` is the length of discretisation along y-axis
+        * n_blocks is the number of gmLP blocks
+        * d_in is the dimensionality ($d$) of $X$
+        * d_ffn is the dimensionality of $Z$
+        * Nx is the length of discretisation along x-axis
+        * Ny is the length of discretisation along y-axis
 
         """
         super().__init__()
@@ -175,13 +175,14 @@ class gMLP(nn.Module):
             nparams += param.numel()
         return nparams
 
-#Example Usage
+# %% 
+# #Example Usage
 
-X = torch.ones(1, 2, 64, 64, 1) #BS, ndim, Nx, Ny, Nt
-model = gMLP(n_blocks = 8, d_in=2, d_ffn=32, Nx=64, Ny=64)
-Y = model(X)
+# X = torch.ones(1, 2, 64, 64, 1) #BS, ndim, Nx, Ny, Nt
+# model = gMLP(n_blocks = 8, d_in=2, d_ffn=32, Nx=64, Ny=64)
+# Y = model(X)
 
-print(f"Input shape: {X.shape}")
-print(f"Output shape: {Y.shape}")
+# print(f"Input shape: {X.shape}")
+# print(f"Output shape: {Y.shape}")
 # print(f"Paramters: {model.count_params()}")
-# # %%
+# %%

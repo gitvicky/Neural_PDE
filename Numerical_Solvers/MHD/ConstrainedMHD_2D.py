@@ -317,13 +317,13 @@ def solve(N=128, boxsize=1.0, tEnd=0.5, a=1.0, b=1.0, c=1.0):
 	# Simulation parameters
 	N                      = N # resolution
 	boxsize                = boxsize
-	gamma                  = 5/3 # ideal gas gamma
+	gamma                  = 2/3 # ideal gas gamma
 	courant_fac            = 0.4
 	t                      = 0
 	tEnd                   = 0.5
 	tOut                   = 0.01 # draw frequency
 	useSlopeLimiting       = True
-	plotRealTime = True # switch on for plotting as the simulation goes along
+	plotRealTime = False # switch on for plotting as the simulation goes along
 	
 	# Mesh
 	dx = boxsize / N
@@ -368,10 +368,10 @@ def solve(N=128, boxsize=1.0, tEnd=0.5, a=1.0, b=1.0, c=1.0):
 		cf = np.sqrt( 0.5*(c0**2+ca**2) + 0.5*np.sqrt((c0**2+ca**2)**2) )
 		# dt = courant_fac * np.min( dx / (cf + np.sqrt(vx**2+vy**2)) )#variable timestep
 		dt = 1e-4#Fixed timestep
-		plotThisTurn = False
-		if t + dt > outputCount*tOut:
-			dt = outputCount*tOut - t
-			plotThisTurn = True
+		# plotThisTurn = False
+		# if t + dt > outputCount*tOut:
+		# 	dt = outputCount*tOut - t
+		# 	plotThisTurn = True
 		
 		# calculate gradients
 		rho_dx, rho_dy = getGradient(rho, dx)

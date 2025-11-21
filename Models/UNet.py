@@ -204,7 +204,7 @@ class UNet2d(nn.Module):
             c += reduce(operator.mul, list(p.size()))
         return c
 # %%
-# #Example Usage
+# # #Example Usage
 # model = UNet2d(in_channels=5, out_channels=10, init_features=32, in_vars=1, out_vars=2, dropout=False)
 # print(model.count_params())
 # ins = torch.randn(20,1,100,100,5) #BS, num_vars, Nx, Ny, T_in

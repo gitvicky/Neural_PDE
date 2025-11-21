@@ -31,3 +31,6 @@ Plots/
 
 #Submission Script
 *.sh
+
+#Env
+.venv/

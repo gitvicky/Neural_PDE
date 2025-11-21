@@ -107,7 +107,6 @@ class FNO2d(nn.Module):
         return x
 
 # %%
-
 class FNO_multi2d(nn.Module):
     def __init__(self, T_in, step, modes1, modes2, num_vars, width_time, width_vars=0, grid='arbitrary'):
         super(FNO_multi2d, self).__init__()
@@ -202,8 +201,8 @@ class FNO_multi2d(nn.Module):
         return c
 # %%
 #Example Usage
-# model = FNO_multi(T_in=20, step=5, modes1=8, modes2=8, num_vars=1, width_time=32, width_vars=0)
-# ins = torch.randn(100,1,64,64,20) #BS, num_vars, Nx, Ny, T_in
+# model = FNO_multi2d(T_in=1, step=5, modes1=8, modes2=8, num_vars=1, width_time=32, width_vars=0)
+# ins = torch.randn(100,1,64,64,1) #BS, num_vars, Nx, Ny, T_in
 # outs = model(ins)
 # %% 
 # 1D FNO 

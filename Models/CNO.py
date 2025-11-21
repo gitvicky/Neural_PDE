@@ -357,7 +357,7 @@ class CNO2d(nn.Module):
 # N_res_neck = 2
 # channel_multiplier = 16
 
-# s = 128
+# s = 64
 
 # cno = CNO2d(in_dim = 3,                                    # Number of input channels.
 #             out_dim = 3,                                   # Number of output channels.
@@ -368,11 +368,11 @@ class CNO2d(nn.Module):
 #             channel_multiplier = channel_multiplier,       # How the number of channels evolve?
 #             use_bn = False)
 
-# X = torch.rand((256, 3, s, s, 1)).type(torch.float32)
-# Y = torch.ones((256, 3, s, s, 1)).type(torch.float32)
+# X = torch.rand((10, 3, s, s, 1)).type(torch.float32)
+# Y = torch.ones((10, 3, s, s, 1)).type(torch.float32)
 # out = cno(X)
 
 # print(f"Input shape: {X.shape}")
-# print(f"Output shape: {Y.shape}")
+# print(f"Output shape: {out.shape}")
 # print(f"Paramters: {cno.count_params()}")
 # %%

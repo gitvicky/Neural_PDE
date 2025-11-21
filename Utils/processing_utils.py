@@ -27,6 +27,9 @@ def Normalisation(norm_strategy):
         normalizer = Gaussian_Normalizer
     elif norm_strategy == 'Identity':
         normalizer = Identity_Normalizer
+    else:
+        # Fix: Raise proper error for invalid normalization type
+        raise KeyError(f"Unknown normalization strategy: {norm_strategy}")
     return normalizer
 
 # normalization, pointwise gaussian
@@ -35,37 +38,37 @@ class UnitGaussian_Normalizer(object):
         super(UnitGaussian_Normalizer, self).__init__()
 
         # x could be in shape of ntrain*n or ntrain*T*n or ntrain*n*T
-        self.mean = torch.mean(x, 0)
-        self.std = torch.std(x, 0)
+        self.a = torch.mean(x, 0)
+        self.b = torch.std(x, 0)
         self.eps = eps
 
     def encode(self, x):
-        x = (x - self.mean) / (self.std + self.eps)
+        x = (x - self.a) / (self.b + self.eps)
         return x
 
     def decode(self, x, sample_idx=None):
         if sample_idx is None:
-            std = self.std + self.eps  # n
-            mean = self.mean
+            std = self.b + self.eps  # n
+            mean = self.a
         else:
-            if len(self.mean.shape) == len(sample_idx[0].shape):
-                std = self.std[sample_idx] + self.eps  # batch*n
-                mean = self.mean[sample_idx]
-            if len(self.mean.shape) > len(sample_idx[0].shape):
-                std = self.std[:, sample_idx] + self.eps  # T*batch*n
-                mean = self.mean[:, sample_idx]
+            if len(self.a.shape) == len(sample_idx[0].shape):
+                std = self.b[sample_idx] + self.eps  # batch*n
+                mean = self.a[sample_idx]
+            if len(self.a.shape) > len(sample_idx[0].shape):
+                std = self.b[:, sample_idx] + self.eps  # T*batch*n
+                mean = self.a[:, sample_idx]
 
         # x is in shape of batch*n or T*batch*n
         x = (x * std) + mean
         return x
 
     def cuda(self):
-        self.mean = self.mean.cuda()
-        self.std = self.std.cuda()
+        self.a = self.a.cuda()
+        self.b = self.b.cuda()
 
     def cpu(self):
-        self.mean = self.mean.cpu()
-        self.std = self.std.cpu()
+        self.a = self.a.cpu()
+        self.b = self.b.cpu()
 
 
 # normalization, Gaussian
@@ -73,25 +76,25 @@ class Gaussian_Normalizer(object):
     def __init__(self, x, eps=0.01):
         super(Gaussian_Normalizer, self).__init__()
 
-        self.mean = torch.mean(x)
-        self.std = torch.std(x)
+        self.a = torch.mean(x) #mean
+        self.b = torch.std(x) #std
         self.eps = eps
 
     def encode(self, x):
-        x = (x - self.mean) / (self.std + self.eps)
+        x = (x - self.a) / (self.b + self.eps)
         return x
 
     def decode(self, x, sample_idx=None):
-        x = (x * (self.std + self.eps)) + self.mean
+        x = (x * (self.b + self.eps)) + self.a
         return x
 
     def cuda(self):
-        self.mean = self.mean.cuda()
-        self.std = self.std.cuda()
+        self.a = self.a.cuda()
+        self.b = self.b.cuda()
 
     def cpu(self):
-        self.mean = self.mean.cpu()
-        self.std = self.std.cpu()
+        self.a = self.a.cpu()
+        self.b = self.b.cpu()
 
 
 # normalization, scaling by range
@@ -101,7 +104,11 @@ class Range_Normalizer(object):
         mymin = torch.min(x, 0)[0].view(-1)
         mymax = torch.max(x, 0)[0].view(-1)
 
-        self.a = (high - low) / (mymax - mymin)
+        # Fix: Handle case where min == max (constant data)
+        range_val = mymax - mymin
+        range_val = torch.where(range_val == 0, torch.ones_like(range_val), range_val)
+        
+        self.a = (high - low) / range_val
         self.b = -self.a * mymax + high
 
     def encode(self, x):
@@ -140,11 +147,18 @@ class MinMax_Normalizer_variable(object):
             min_u = torch.min(x[:, ii, :, :, :])
             max_u = torch.max(x[:, ii, :, :, :])
             
-            aa.append((high - low) / (max_u - min_u))
-            bb.append(-aa[ii] * max_u + high)
+            # Fix: Handle case where min == max (constant data)
+            range_val = max_u - min_u
+            if range_val == 0:
+                # For constant data, set scaling to identity with offset to target range
+                aa.append(torch.tensor(1.0))
+                bb.append(high - min_u)
+            else:
+                aa.append((high - low) / range_val)
+                bb.append(-aa[ii] * max_u + high)
         
-        self.a = torch.tensor(aa)
-        self.b = torch.tensor(bb)
+        self.a = torch.stack(aa)
+        self.b = torch.stack(bb)
         self.low = low
         self.high = high
 
@@ -196,7 +210,7 @@ class MinMax_Normalizer_variable(object):
 
 
 class LogNormalizer(object):
-    def __init__(self, x,  low=0.0, high=1.0, eps=0.01):
+    def __init__(self, x, low=0.0, high=1.0, eps=0.01):
         super(LogNormalizer, self).__init__()
 
         self.num_vars = x.shape[1]
@@ -207,32 +221,41 @@ class LogNormalizer(object):
             min_u = torch.min(x[:, ii, :, :, :])
             max_u = torch.max(x[:, ii, :, :, :])
             
-            aa.append((high - low) / (max_u - min_u))
-            bb.append( -aa[ii] * max_u + high)
+            # Fix: Handle case where min == max (constant data)
+            range_val = max_u - min_u
+            if range_val == 0:
+                aa.append(torch.tensor(1.0))
+                bb.append(high - min_u)
+            else:
+                aa.append((high - low) / range_val)
+                bb.append(-aa[ii] * max_u + high)
         
-        self.a = torch.tensor(aa)
-        self.b = torch.tensor(bb)
-        
+        self.a = torch.stack(aa)
+        self.b = torch.stack(bb)
         self.eps = eps
 
     def encode(self, x):
+        # First apply min-max normalization
         for ii in range(self.num_vars):
             x[:, ii] = self.a[ii] * x[:, ii] + self.b[ii] 
-
+        
+        # Then apply log transform
         x = torch.log(x + 1 + self.eps)
-
         return x
 
     def decode(self, x):
-        for ii in range(self.num_vars):
-            x[:, ii] =  (x[:, ii] - self.b[ii])  /  self.a[ii] 
+        # First reverse log transform
         x = torch.exp(x) - 1 - self.eps
+        
+        # Then reverse min-max normalization
+        for ii in range(self.num_vars):
+            x[:, ii] = (x[:, ii] - self.b[ii]) / self.a[ii] 
+        
         return x
 
     def cuda(self):
         self.a = self.a.cuda()
         self.b = self.b.cuda()
-
 
     def cpu(self):
         self.a = self.a.cpu()                                                                                                                                                                                                                         
@@ -246,20 +269,27 @@ class MinMax_Normalizer(object):
         mymin = torch.min(x)
         mymax = torch.max(x)
 
-        self.a = (high - low)/(mymax - mymin)
-        self.b = -self.a*mymax + high
+        # Fix: Handle case where min == max (constant data)
+        range_val = mymax - mymin
+        if range_val == 0:
+            # For constant data, set scaling to identity with offset to target range
+            self.a = torch.tensor(1.0)
+            self.b = high - mymax
+        else:
+            self.a = (high - low) / range_val
+            self.b = -self.a * mymax + high
 
     def encode(self, x):
         s = x.size()
         x = x.reshape(s[0], -1)
-        x = self.a*x + self.b
+        x = self.a * x + self.b
         x = x.view(s)
         return x
 
     def decode(self, x):
         s = x.size()
         x = x.reshape(s[0], -1)
-        x = (x - self.b)/self.a
+        x = (x - self.b) / self.a
         x = x.view(s)
         return x
 
@@ -276,8 +306,8 @@ class MinMax_Normalizer(object):
 class Identity_Normalizer(object):
     def __init__(self, x, low=-1.0, high=1.0):
         super(Identity_Normalizer, self).__init__()
-        self.a = torch.tensor(0)
-        self.b = torch.tensor(0)
+        self.a = torch.tensor(0.0)
+        self.b = torch.tensor(0.0)
 
     def encode(self, x):
         return x 
@@ -299,52 +329,167 @@ class Identity_Normalizer(object):
 ##################################
 
 # loss function with rel/abs Lp loss
+# https://github.com/neuraloperator/neuraloperator/blob/main/neuralop/losses/data_losses.py
 class LpLoss(object):
-    def __init__(self, d=2, p=2, size_average=True, reduction=True):
-        super(LpLoss, self).__init__()
+    r"""
+    LpLoss provides the L-p norm between two 
+    discretized d-dimensional functions. Note that 
+    LpLoss always averages over the spatial dimensions.
 
-        # Dimension and Lp-norm type are postive
-        assert d > 0 and p > 0
+    .. note :: 
+        In function space, the Lp norm is an integral over the
+        entire domain. To ensure the norm converges to the integral,
+        we scale the matrix norm by quadrature weights along each spatial dimension.
+
+        If no quadrature is passed at a call to LpLoss, we assume a regular 
+        discretization and take ``1 / measure`` as the quadrature weights. 
+
+    Parameters
+    ----------
+    d : int, optional
+        dimension of data on which to compute, by default 1
+    p : int, optional
+        order of L-norm, by default 2
+        L-p norm: [\sum_{i=0}^n (x_i - y_i)**p] ** (1/p)
+    measure : float or list, optional
+        measure of the domain, by default 1.0
+        either single scalar for each dim, or one per dim
+
+        .. note::
+
+        To perform quadrature, ``LpLoss`` scales ``measure`` by the size
+        of each spatial dimension of ``x``, and multiplies them with 
+        ||x-y||, such that the final norm is a scaled average over the spatial
+        dimensions of ``x``. 
+    reduction : str, optional
+        whether to reduce across the batch and channel dimensions
+        by summing ('sum') or averaging ('mean')
+
+        .. warning:: 
+
+            ``LpLoss`` always reduces over the spatial dimensions according to ``self.measure``.
+            `reduction` only applies to the batch and channel dimensions.
+    eps : float, optional
+        small number added to the denominator for numerical stability when using the relative loss
+
+    Examples
+    --------
+
+    
+    """
+
+    def __init__(self, d=1, p=2, measure=1., reduction='sum', eps=1e-8):
+        super().__init__()
 
         self.d = d
         self.p = p
+        self.eps = eps
+        
+        allowed_reductions = ["sum", "mean"]
+        assert reduction in allowed_reductions,\
+        f"error: expected `reduction` to be one of {allowed_reductions}, got {reduction}"
         self.reduction = reduction
-        self.size_average = size_average
 
-    def abs(self, x, y):
-        num_examples = x.size()[0]
+        if isinstance(measure, float):
+            self.measure = [measure]*self.d
+        else:
+            self.measure = measure
+    
+    @property
+    def name(self):
+        return f"L{self.p}_{self.d}Dloss"
+    
+    def uniform_quadrature(self, x):
+        """
+        uniform_quadrature creates quadrature weights
+        scaled by the spatial size of ``x`` to ensure that 
+        ``LpLoss`` computes the average over spatial dims. 
 
-        # Assume uniform mesh
-        h = 1.0 / (x.size()[1] - 1.0)
+        Parameters
+        ----------
+        x : torch.Tensor
+            input data
 
-        all_norms = (h ** (self.d / self.p)) * torch.norm(x.view(num_examples, -1) - y.view(num_examples, -1), self.p,
-                                                          1)
+        Returns
+        -------
+        quadrature : list
+            list of quadrature weights per-dim
+        """
+        quadrature = [0.0]*self.d
+        for j in range(self.d, 0, -1):
+            quadrature[-j] = self.measure[-j]/x.size(-j)
+        
+        return quadrature
 
-        if self.reduction:
-            if self.size_average:
-                return torch.mean(all_norms)
-            else:
-                return torch.sum(all_norms)
+    def reduce_all(self, x):
+        """
+        reduce x across the batch according to `self.reduction`
 
-        return all_norms
+        Params
+        ------
+        x: torch.Tensor
+            inputs
+        """
+        if self.reduction == 'sum':
+            x = torch.sum(x)
+        else:
+            x = torch.mean(x)
+        
+        return x
+
+    def abs(self, x, y, quadrature=None):
+        """absolute Lp-norm
+
+        Parameters
+        ----------
+        x : torch.Tensor
+            inputs
+        y : torch.Tensor
+            targets
+        quadrature : float or list, optional
+            quadrature weights for integral
+            either single scalar or one per dimension
+        """
+        #Assume uniform mesh
+        if quadrature is None:
+            quadrature = self.uniform_quadrature(x)
+        else:
+            if isinstance(quadrature, float):
+                quadrature = [quadrature]*self.d
+        
+        const = math.prod(quadrature)**(1.0/self.p)
+        diff = const*torch.norm(torch.flatten(x, start_dim=-self.d) - torch.flatten(y, start_dim=-self.d), \
+                                              p=self.p, dim=-1, keepdim=False)
+
+        diff = self.reduce_all(diff).squeeze()
+            
+        return diff
 
     def rel(self, x, y):
+        """
+        rel: relative LpLoss
+        computes ||x-y||/(||y|| + eps)
 
-        num_examples = x.size()[0]
+        Parameters
+        ----------
+        x : torch.Tensor
+            inputs
+        y : torch.Tensor
+            targets
+        """
 
-        diff_norms = torch.norm(x.reshape(num_examples, -1) - y.reshape(num_examples, -1), self.p, 1)
-        y_norms = torch.norm(y.reshape(num_examples, -1), self.p, 1)
+        diff = torch.norm(torch.flatten(x, start_dim=-self.d) - torch.flatten(y, start_dim=-self.d), \
+                          p=self.p, dim=-1, keepdim=False)
+        ynorm = torch.norm(torch.flatten(y, start_dim=-self.d), p=self.p, dim=-1, keepdim=False)
 
-        if self.reduction:
-            if self.size_average:
-                return torch.mean(diff_norms / y_norms)
-            else:
-                return torch.sum(diff_norms / y_norms)
+        diff = diff/(ynorm + self.eps)
 
-        return diff_norms / y_norms
+        diff = self.reduce_all(diff).squeeze()
+            
+        return diff
 
-    def __call__(self, x, y):
-        return self.rel(x, y)
+    def __call__(self, y_pred, y, **kwargs):
+        return self.rel(y_pred, y)
 
 class HsLoss(object):
     def __init__(self, d=2, p=2, k=1, a=None, group=False, size_average=True, reduction=True):
