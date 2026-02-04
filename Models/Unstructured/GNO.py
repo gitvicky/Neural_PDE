@@ -1,259 +1,194 @@
-
 # %%
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import MessagePassing
-from torch_geometric.utils import add_self_loops, degree
-import numpy as np
+import math
 
+# We import GNOBlock. 
+# Note: The code you provided IS the source code for neuralop.layers.GNOBlock.
+# Assuming you have the library installed, we import from there. 
+# If you are using your local file, replace this with: from your_file import GNOBlock
+from neuralop.layers.gno_block import GNOBlock
 
-class GNOLayer(MessagePassing):
+class GNO2DTimeSolver(nn.Module):
     """
-    Single GNO (Graph Neural Operator) Layer using PyTorch Geometric's MessagePassing
-    This is the core building block similar to what you'd find in neural operator libraries
+    A Neural Operator architecture using GNO Blocks to solve a 2D PDE in time.
+    
+    Architecture:
+    1. Lift: Projects physical input (u, v, etc) to latent channels.
+    2. Process: Layers of GNOBlocks to integrate information over the mesh.
+    3. Project: Projects latent channels back to physical output.
     """
-    def __init__(self, in_channels, out_channels, edge_dim, aggr='mean'):
-        super().__init__(aggr=aggr)
+    def __init__(self, 
+                 in_channels, 
+                 out_channels, 
+                 coord_dim=2, 
+                 latent_channels=32, 
+                 num_layers=3, 
+                 radius=0.2):
+        super().__init__()
+
+        # 1. Lifting Layer
+        # Maps input function values (e.g., velocity at t) to latent space
+        self.lifting = nn.Linear(in_channels, latent_channels)
+
+        # 2. Processing Layers (The GNO Blocks)
+        self.layers = nn.ModuleList()
         
-        # Edge network (MLP that processes edge features to create edge weights)
-        self.edge_mlp = nn.Sequential(
-            nn.Linear(edge_dim, edge_dim * 2),
+        for _ in range(num_layers):
+            # We use the GNOBlock as defined in your prompt/neuralop library
+            gno_layer = GNOBlock(
+                in_channels=latent_channels,
+                out_channels=latent_channels,
+                coord_dim=coord_dim,
+                radius=radius,
+                transform_type='linear', # (b) Integral transform
+                use_open3d_neighbor_search=False # Set False for simple 2D PyTorch fallback
+            )
+            self.layers.append(gno_layer)
+
+        # 3. Projection Layer
+        # Maps latent space back to physical values (e.g., velocity at t+1)
+        self.projection = nn.Sequential(
+            nn.Linear(latent_channels, latent_channels * 2),
             nn.GELU(),
-            nn.Linear(edge_dim * 2, in_channels * out_channels)
+            nn.Linear(latent_channels * 2, out_channels)
         )
-        
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        
-    def forward(self, x, edge_index, edge_attr):
-        """
-        x: Node features [N, in_channels]
-        edge_index: Edge indices [2, E]
-        edge_attr: Edge features [E, edge_dim]
-        """
-        # Generate edge weights from edge features
-        edge_weights = self.edge_mlp(edge_attr)  # [E, in_channels * out_channels]
-        edge_weights = edge_weights.view(-1, self.in_channels, self.out_channels)  # [E, in_channels, out_channels]
-        
-        # Propagate messages
-        return self.propagate(edge_index, x=x, edge_weights=edge_weights)
-    
-    def message(self, x_j, edge_weights):
-        """
-        x_j: Features of source nodes [E, in_channels]
-        edge_weights: Learned weights for each edge [E, in_channels, out_channels]
-        """
-        # Apply edge-specific transformation: [E, in_channels] @ [E, in_channels, out_channels] -> [E, out_channels]
-        # out = torch.bmm(x_j.unsqueeze(1), edge_weights).squeeze(1)
-        # return out
-        return torch.einsum('bi,bio->bo', x_j, edge_weights)
 
-
-
-class GNOBlock(nn.Module):
-    """
-    Complete GNO block with multiple layers
-    This is what you'd use as a drop-in replacement in neural operator architectures
-    """
-    def __init__(self, in_channels, out_channels, hidden_channels, edge_dim, n_layers=4):
-        super().__init__()
-        
-        self.lifting = nn.Linear(in_channels, hidden_channels)
-        
-        self.gno_layers = nn.ModuleList([
-            GNOLayer(hidden_channels, hidden_channels, edge_dim)
-            for _ in range(n_layers)
-        ])
-        
-        self.projection = nn.Linear(hidden_channels, out_channels)
-        self.activation = nn.GELU()
-        
-    def forward(self, x, edge_index, edge_attr):
+    def forward(self, y, x, f_y):
         """
-        x: Node features [N, in_channels] or [B*N, in_channels]
-        edge_index: Edge indices [2, E]
-        edge_attr: Edge features [E, edge_dim]
+        y: (Batch, N_points, coord_dim) -> Input coordinates
+        x: (Batch, N_points, coord_dim) -> Output coordinates (usually same as y for autoregressive)
+        f_y: (Batch, N_points, in_channels) -> Input features (physics state at time t)
         """
-        # Lift to hidden dimension
-        x = self.lifting(x)
         
-        # Apply GNO layers
-        for layer in self.gno_layers:
-            x = layer(x, edge_index, edge_attr)
-            x = self.activation(x)
-        
-        # Project to output dimension
-        x = self.projection(x)
-        
-        return x
+        # Lift input features to latent space
+        # f_y shape: [B, N, in_channels] -> [B, N, latent_channels]
+        h = self.lifting(f_y)
+        print(h.shape)
 
+        # Apply GNO Layers
+        # GNOBlock expects specific shapes. If the code provided is exact, 
+        # it expects y and x to be [N, coord_dim] (not batched) if the geometry is constant.
+        # If geometry varies per batch, we usually iterate or use batch-supported search.
+        # Here we assume constant geometry for simplicity (Standard for PDE solvers).
+        
+        # Extract single geometry sample (assuming all items in batch share the mesh)
+        mesh_y = y[0] 
+        mesh_x = x[0] 
 
-class GNO(nn.Module):
-    """
-    Full GNO model matching your original interface but using PyG's MessagePassing
-    """
-    def __init__(self, in_channels=1, out_channels=1, hidden_channels=32, n_layers=4, r=0.1,
-                 x_in=None, y_in=None, x_out=None, y_out=None):
-        super().__init__()
-        
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-        self.r = r
-        
-        # Set up grids
-        if x_in is None:
-            raise ValueError("x_in needs to be specified")
-        if y_in is None:
-            raise ValueError("x_in needs to be specified")
-        if x_out is None:
-            x_out = x_in
-        if y_out is None:
-            y_out = y_in
-        
-        self.register_buffer('x_in', x_in if isinstance(x_in, torch.Tensor) else torch.tensor(x_in, dtype=torch.float32))
-        self.register_buffer('y_in', y_in if isinstance(y_in, torch.Tensor) else torch.tensor(y_in, dtype=torch.float32))
-        self.register_buffer('x_out', x_out if isinstance(x_out, torch.Tensor) else torch.tensor(x_out, dtype=torch.float32))
-        self.register_buffer('y_out', y_out if isinstance(y_out, torch.Tensor) else torch.tensor(y_out, dtype=torch.float32))
-        
-        # Create coordinates
-        xx_in, yy_in = torch.meshgrid(self.x_in, self.y_in, indexing='ij')
-        coords_in = torch.stack([xx_in.flatten(), yy_in.flatten()], dim=-1)
-        
-        xx_out, yy_out = torch.meshgrid(self.x_out, self.y_out, indexing='ij')
-        coords_out = torch.stack([xx_out.flatten(), yy_out.flatten()], dim=-1)
-        
-        self.register_buffer('coords_in', coords_in)
-        self.register_buffer('coords_out', coords_out)
-        
-        self.N_in = coords_in.shape[0]
-        self.N_out = coords_out.shape[0]
-        self.same_grid = torch.allclose(coords_in, coords_out) if self.N_in == self.N_out else False
-        
-        self.input_spatial_shape = (len(self.x_in), len(self.y_in))
-        self.output_spatial_shape = (len(self.x_out), len(self.y_out))
-        
-        # Build graph
-        edge_index, edge_attr = self._build_graph()
-        self.register_buffer('edge_index', edge_index)
-        self.register_buffer('edge_attr', edge_attr)
-        
-        # GNO block - this is the key component from neural operator perspective
-        self.gno_block = GNOBlock(
-            in_channels=in_channels,
-            out_channels=out_channels,
-            hidden_channels=hidden_channels,
-            edge_dim=4,  # 2D coordinates concatenated
-            n_layers=n_layers
-        )
-        
-        # Coordinate encoder for output nodes (if different grid)
-        if not self.same_grid:
-            self.coord_encoder = nn.Linear(2, hidden_channels)
-    
-    def _build_graph(self):
-        if self.same_grid:
-            pwd = torch.cdist(self.coords_in, self.coords_in)
-            edge_index = torch.stack(torch.where(pwd <= self.r))
-            edge_attr = torch.cat([self.coords_in[edge_index[0]], self.coords_in[edge_index[1]]], dim=-1)
-        else:
-            pwd = torch.cdist(self.coords_in, self.coords_out)
-            edge_index = torch.stack(torch.where(pwd <= self.r))
-            edge_attr = torch.cat([self.coords_in[edge_index[0]], self.coords_out[edge_index[1]]], dim=-1)
-            edge_index[1, :] = edge_index[1, :] + self.N_in
-        
-        return edge_index, edge_attr
-    
-    def forward(self, u):
-        """
-        u: (batch_size, in_channels, N_x, N_y, 1) or (batch_size, in_channels, N_x, N_y)
-        """
-        if u.dim() == 5:
-            u = u[..., 0]
-        
-        batch_size, channels, N_x, N_y = u.shape
-        
-        # Reshape to node features
-        print(u.shape)
-        u_in = u.permute(0, 2, 3, 1).reshape(batch_size, -1, self.in_channels)
-        print(u_in.shape)
-        
-        if not self.same_grid:
-            # Create output node features (just coordinates)
-            coord_features = self.coord_encoder(self.coords_out.unsqueeze(0).expand(batch_size, -1, -1))
+        for layer in self.layers:
+            # GNOBlock Forward: (y, x, f_y)
+            # Note: The output of GNO is often the integral result. 
+            # Standard ResNet logic: h_new = Activation(GNO(h)) + h
             
-            # Process each batch
-            outputs = []
-            for b in range(batch_size):
-                # Combine input and output nodes
-                x_combined = torch.cat([u_in[b], coord_features[b]], dim=0)
-                
-                # Apply GNO block
-                x_out = self.gno_block(x_combined, self.edge_index, self.edge_attr)
-                
-                # Extract output nodes
-                outputs.append(x_out[self.N_in:])
-            
-            u_final = torch.stack(outputs, dim=0)
-        else:
-            # Process each batch
-            outputs = []
-            for b in range(batch_size):
-                x_out = self.gno_block(u_in[b], self.edge_index, self.edge_attr)
-                outputs.append(x_out)
-            
-            u_final = torch.stack(outputs, dim=0)
+            h_out = layer(y=mesh_y, x=mesh_x, f_y=h)
+            h = F.gelu(h_out) + h # Skip connection
+            print(h.shape)
+
+        # Project back to output
+        out = self.projection(h)
+        print(out.shape)
+        return out
+
+# # ==========================================
+# #  Synthetic Data & Training Loop
+# # ==========================================
+
+# def generate_synthetic_data(num_samples=100, num_points=200):
+#     """
+#     Generates synthetic wave data on a 2D random mesh.
+#     Input: State at t
+#     Output: State at t+1 (simply shifted)
+#     """
+#     # Random 2D coordinates in [0,1]
+#     coords = torch.rand(num_samples, num_points, 2)
+    
+#     # Generate a wave function: sin(2pi * x) * cos(2pi * y)
+#     # We will shift the phase to simulate time evolution
+#     x_c = coords[..., 0]
+#     y_c = coords[..., 1]
+    
+#     # Input: Time t
+#     u_t = torch.sin(2 * math.pi * x_c) * torch.cos(2 * math.pi * y_c)
+    
+#     # Target: Time t+dt (Phase shift)
+#     u_t_plus_1 = torch.sin(2 * math.pi * (x_c + 0.1)) * torch.cos(2 * math.pi * (y_c + 0.1))
+    
+#     # Add channel dimension: (Batch, Points, 1)
+#     return coords, u_t.unsqueeze(-1), u_t_plus_1.unsqueeze(-1)
+
+# # %% 
+# # Hyperparameters
+# BATCH_SIZE = 5
+# EPOCHS = 1
+# LR = 1e-3
+# NUM_POINTS = 300 # Size of the mesh
+# RADIUS = 0.1     # Neighborhood search radius
+
+# device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+# print(f"Running on {device}...")
+
+# # 1. Prepare Data
+# print("Generating synthetic PDE data...")
+# coords, inputs, targets = generate_synthetic_data(num_samples=100, num_points=NUM_POINTS)
+
+# # Move to device
+# coords = coords.to(device)
+# inputs = inputs.to(device)
+# targets = targets.to(device)
+
+# # 2. Initialize Model
+# model = GNO2DTimeSolver(
+#     in_channels=1,    # Scalar field (e.g. Pressure)
+#     out_channels=1,   # Scalar field
+#     coord_dim=2,      # 2D Mesh
+#     radius=RADIUS
+# ).to(device)
+
+# optimizer = torch.optim.Adam(model.parameters(), lr=LR)
+# loss_fn = nn.MSELoss()
+
+# # 3. Training Loop
+# print("Starting training...")
+# model.train()
+
+# for epoch in range(EPOCHS):
+#     epoch_loss = 0
+    
+#     # Simple batching loop
+#     for i in range(0, len(coords), BATCH_SIZE):
+#         batch_coords = coords[i:i+BATCH_SIZE]
+#         batch_in = inputs[i:i+BATCH_SIZE]
+#         batch_target = targets[i:i+BATCH_SIZE]
+
+#         optimizer.zero_grad()
         
-        # Reshape to output format
-        output_shape = (batch_size, self.out_channels, *self.output_spatial_shape)
-        u_out = u_final.reshape(*output_shape)
+#         # Forward pass: Predict t+1 based on t and coordinates
+#         pred = model(y=batch_coords, x=batch_coords, f_y=batch_in)
         
-        return u_out.unsqueeze(-1)
-    
-    def count_params(self):
-        return sum(p.numel() for p in self.parameters())
+#         loss = loss_fn(pred, batch_target)
+#         loss.backward()
+#         optimizer.step()
+        
+#         epoch_loss += loss.item()
 
-# %% 
-import time 
-# Example usage
-if __name__ == "__main__":
-    disc = 32
-    x = torch.linspace(0, 1, disc)
-    y = torch.linspace(0, 1, disc)
-    
-    # Create GNO model using PyG's MessagePassing as the core
-    model = GNO(
-        in_channels=2,
-        out_channels=2,
-        hidden_channels=16,
-        n_layers=2,
-        r=0.1,
-        x_in=x,
-        y_in=y
-    )
-    
-    print(f"Model input grid: {model.input_spatial_shape}")
-    print(f"Model output grid: {model.output_spatial_shape}")
-    print(f"Parameters: {model.count_params():,}")
-    
-    # Test
-    batch_size = 4
-    xx, yy = torch.meshgrid(x, y, indexing='ij')
-    u = torch.zeros(batch_size, 2, disc, disc)
-    u[:, 0] = torch.sin(2 * np.pi * xx).unsqueeze(0)
-    u[:, 1] = torch.cos(2 * np.pi * yy).unsqueeze(0)
-    u = u.unsqueeze(-1)
-    
-    print(f"\nInput shape: {u.shape}")
-    start = time.time()
-    out = model(u)
-    end = time.time()
-    print(f"Output shape: {out.shape}")
-    print(f"Batched forward pass time: {(end - start) * 1000:.2f} ms")
+#     if (epoch+1) % 10 == 0:
+#         print(f"Epoch {epoch+1}/{EPOCHS} - Loss: {epoch_loss/len(coords):.6f}")
 
+# # 4. Evaluation
+# print("\nEvaluation on one sample:")
+# model.eval()
+# with torch.no_grad():
+#     test_coords = coords[0:1]
+#     test_in = inputs[0:1]
+#     test_target = targets[0:1]
     
-    # print("\nGNOBlock can be imported and used as a standalone module:")
-    # print("from this_module import GNOBlock")
-    # print("gno_layer = GNOBlock(in_channels=32, out_channels=32, hidden_channels=64, edge_dim=4)")
+#     prediction = model(test_coords, test_coords, test_in)
+#     final_loss = loss_fn(prediction, test_target)
+    
+#     print(f"Target Value (Sample): {test_target[0, 0, 0].item():.4f}")
+#     print(f"Predicted Value (Sample): {prediction[0, 0, 0].item():.4f}")
+#     print(f"MSE Error: {final_loss.item():.6f}")
 
-# %%
+# # %% 
