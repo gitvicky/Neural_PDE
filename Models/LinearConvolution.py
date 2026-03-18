@@ -225,33 +225,33 @@ class LinearConvolutionalModel(nn.Module):
         return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 
-# =============================================================================
-# EXAMPLE USAGE
-# =============================================================================
-if __name__ == "__main__":
-    # Create a completely linear model with Periodic boundaries
-    linear_model = LinearConvolutionalModel(
-        in_features=2,
-        hidden_features=8,
-        out_features=1,
-        num_layers=3,
-        kernel_size=3,
-        boundary_type='periodic',
-        init_type='xavier',
-        use_bias=False
-    )
+# # =============================================================================
+# # EXAMPLE USAGE
+# # =============================================================================
+# if __name__ == "__main__":
+#     # Create a completely linear model with Periodic boundaries
+#     linear_model = LinearConvolutionalModel(
+#         in_features=2,
+#         hidden_features=8,
+#         out_features=2,
+#         num_layers=3,
+#         kernel_size=3,
+#         boundary_type='periodic',
+#         init_type='xavier',
+#         use_bias=False
+#     )
     
-    print(f"Linear Model Parameters: {linear_model.count_params()}")
+#     print(f"Linear Model Parameters: {linear_model.count_params()}")
     
-    # Input: (Batch, Channels, Height, Width)
-    x = torch.randn(4, 2, 32, 32)
+#     # Input: (Batch, Channels, Height, Width)
+#     x = torch.randn(4, 2, 32, 32)
     
-    with torch.no_grad():
-        output = linear_model(x)
+#     with torch.no_grad():
+#         output = linear_model(x)
         
-    print(f"Input shape: {x.shape}")
-    print(f"Output shape: {output.shape}")
-    print("Linear convolution completed successfully.")
+#     print(f"Input shape: {x.shape}")
+#     print(f"Output shape: {output.shape}")
+#     print("Linear convolution completed successfully.")
 
 
 # %%

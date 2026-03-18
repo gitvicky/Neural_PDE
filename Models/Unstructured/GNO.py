@@ -8,8 +8,8 @@ import math
 # Note: The code you provided IS the source code for neuralop.layers.GNOBlock.
 # Assuming you have the library installed, we import from there. 
 # If you are using your local file, replace this with: from your_file import GNOBlock
-from neuralop.layers.gno_block import GNOBlock
 
+from neuralop.layers.gno_block import * 
 class GNO2DTimeSolver(nn.Module):
     """
     A Neural Operator architecture using GNO Blocks to solve a 2D PDE in time.
@@ -24,7 +24,7 @@ class GNO2DTimeSolver(nn.Module):
                  out_channels, 
                  coord_dim=2, 
                  latent_channels=32, 
-                 num_layers=3, 
+                 num_layers=2, 
                  radius=0.2):
         super().__init__()
 
@@ -36,60 +36,79 @@ class GNO2DTimeSolver(nn.Module):
         self.layers = nn.ModuleList()
         
         for _ in range(num_layers):
-            # We use the GNOBlock as defined in your prompt/neuralop library
             gno_layer = GNOBlock(
                 in_channels=latent_channels,
                 out_channels=latent_channels,
                 coord_dim=coord_dim,
                 radius=radius,
-                transform_type='linear', # (b) Integral transform
-                use_open3d_neighbor_search=False # Set False for simple 2D PyTorch fallback
+                transform_type='linear',
+                use_open3d_neighbor_search=False 
             )
             self.layers.append(gno_layer)
 
         # 3. Projection Layer
-        # Maps latent space back to physical values (e.g., velocity at t+1)
+        # Maps latent space back to physical values
         self.projection = nn.Sequential(
             nn.Linear(latent_channels, latent_channels * 2),
             nn.GELU(),
             nn.Linear(latent_channels * 2, out_channels)
         )
 
-    def forward(self, y, x, f_y):
+    def forward(self, x_in, x_out, xx):
         """
-        y: (Batch, N_points, coord_dim) -> Input coordinates
-        x: (Batch, N_points, coord_dim) -> Output coordinates (usually same as y for autoregressive)
-        f_y: (Batch, N_points, in_channels) -> Input features (physics state at time t)
+        x_in: (Batch, N_points, coord_dim) -> Input coordinates
+        x_out: (Batch, N_points, coord_dim) -> Output coordinates
+        xx: (Batch, num_vars, N_points, 1) -> Input features (physics state at time t)
+        
+        Returns:
+        out: (Batch, num_vars, N_points, 1)
         """
         
-        # Lift input features to latent space
-        # f_y shape: [B, N, in_channels] -> [B, N, latent_channels]
-        h = self.lifting(f_y)
-        print(h.shape)
-
-        # Apply GNO Layers
-        # GNOBlock expects specific shapes. If the code provided is exact, 
-        # it expects y and x to be [N, coord_dim] (not batched) if the geometry is constant.
-        # If geometry varies per batch, we usually iterate or use batch-supported search.
-        # Here we assume constant geometry for simplicity (Standard for PDE solvers).
+        # 1. Reshape Input Features
+        # Target internal shape: [Batch, N_points, in_channels]
+        # Current shape: [Batch, num_vars, N_points, 1]
+        if xx.ndim == 4:
+            # Squeeze time dim: [B, C, N, 1] -> [B, C, N]
+            xx = xx.squeeze(-1)
+            # Permute: [B, C, N] -> [B, N, C]
+            xx = xx.permute(0, 2, 1)
         
-        # Extract single geometry sample (assuming all items in batch share the mesh)
-        mesh_y = y[0] 
-        mesh_x = x[0] 
+        # 2. Lift to latent space
+        h = self.lifting(xx) # [B, N, latent]
 
-        for layer in self.layers:
-            # GNOBlock Forward: (y, x, f_y)
-            # Note: The output of GNO is often the integral result. 
-            # Standard ResNet logic: h_new = Activation(GNO(h)) + h
+        # 3. Handle Coordinates
+        # GNOBlock expects [N, coord_dim] (unbatched) if the geometry is constant across the batch.
+        # We assume the mesh is the same for all batch items (standard for this solver type).
+        if x_in.ndim == 3:
+            mesh_in = x_in[0] 
+        else:
+            mesh_in = x_in
             
-            h_out = layer(y=mesh_y, x=mesh_x, f_y=h)
-            h = F.gelu(h_out) + h # Skip connection
-            print(h.shape)
+        if x_out.ndim == 3:
+            mesh_out = x_out[0]
+        else:
+            mesh_out = x_out
 
-        # Project back to output
-        out = self.projection(h)
-        print(out.shape)
+        # 4. Apply GNO Layers
+        for layer in self.layers:
+            # GNOBlock will broadcast mesh_in (N, 2) against h (B, N, latent)
+            h_out = layer(y=mesh_in, x=mesh_out, f_y=h)
+            h = F.gelu(h_out) + h # Skip connection
+
+        # 5. Project Output
+        out = self.projection(h) # [B, N, out_channels]
+
+        # 6. Reshape Output
+        # Target output shape: [Batch, num_vars, N_points, 1]
+        # Current shape: [Batch, N_points, out_channels]
+        out = out.permute(0, 2, 1) # [B, C, N]
+        out = out.unsqueeze(-1)    # [B, C, N, 1]
+
         return out
+
+    def count_params(self):
+        """Count the number of trainable parameters in the model."""
+        return sum(p.numel() for p in self.parameters() if p.requires_grad)
 
 # # ==========================================
 # #  Synthetic Data & Training Loop
