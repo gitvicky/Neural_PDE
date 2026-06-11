@@ -26,13 +26,13 @@ start_time = time()
 
 n_sims = 100
 
-# # in-dist
-# lb = np.asarray([0.5, 0.5, 0.5]) #a, b, c
-# ub = np.asarray([1.0, 1.0, 1.0])
+# in-dist
+lb = np.asarray([0.5, 0.5, 0.5]) #a, b, c
+ub = np.asarray([1.0, 1.0, 1.0])
 
-#out-dist
-lb = np.asarray([0.1, 0.1, 0.1]) #a, b, c
-ub = np.asarray([0.5, 0.5, 0.5])
+# #out-dist
+# lb = np.asarray([0.1, 0.1, 0.1]) #a, b, c
+# ub = np.asarray([0.5, 0.5, 0.5])
 
 params = lb + (ub - lb) * lhs(3, n_sims*2) #Safety 20 
 
@@ -75,7 +75,7 @@ Bx_list = []
 By_list = []
 
 for ii in tqdm(range(n_sims)):
-    rho_list.append(np.load(data_loc + str(ii) + ".npz")['u'])
+    rho_list.append(np.load(data_loc + str(ii) + ".npz")['rho'])
     u_list.append(np.load(data_loc + str(ii) + ".npz")['u'])
     v_list.append(np.load(data_loc + str(ii) + ".npz")['v'])
     p_list.append(np.load(data_loc + str(ii) + ".npz")['p'])

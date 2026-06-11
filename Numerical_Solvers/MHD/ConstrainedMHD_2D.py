@@ -317,7 +317,7 @@ def solve(N=128, boxsize=1.0, tEnd=0.5, a=1.0, b=1.0, c=1.0):
 	# Simulation parameters
 	N                      = N # resolution
 	boxsize                = boxsize
-	gamma                  = 2/3 # ideal gas gamma
+	gamma                  = 5/3 # ideal gas gamma
 	courant_fac            = 0.4
 	t                      = 0
 	tEnd                   = 0.5
