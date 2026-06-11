@@ -77,108 +77,90 @@ class BoundaryManager:
         for side in ['left', 'right', 'top', 'bottom']:
             self.set_boundary_type(side, bc_type, value)
     
+    def _pad_side(self, result, bc_type, bc_value, pad):
+        """Apply a single one-sided pad for a non-periodic boundary condition.
+
+        ``free_slip`` (and any unrecognised type) is a no-op, matching the
+        original behaviour where it had no padding branch.
+        """
+        if bc_type == 'dirichlet':
+            return F.pad(result, pad, mode='constant', value=bc_value)
+        elif bc_type in ('neumann', 'outflow'):
+            return F.pad(result, pad, mode='replicate')
+        elif bc_type == 'symmetric':
+            return F.pad(result, pad, mode='reflect')
+        return result
+
+    def _pad_axis(self, result, lo_side, hi_side, lo_pad, hi_pad, dim):
+        """
+        Pad both sides of a single axis (``dim=3`` is the width axis, ``dim=2``
+        the height axis).
+
+        Periodic boundaries are a genuine two-sided wrap. Padding each side
+        sequentially is WRONG: the second side's wrap is sliced from the
+        already-padded tensor (duplicating the near edge instead of wrapping to
+        the far edge). So when both sides of the axis are periodic we slice both
+        wraps from the same unpadded tensor and concatenate once. Otherwise we
+        pad each side independently, applying any periodic side first so a later
+        non-periodic pad cannot pollute the wrap source.
+        """
+        lo_type = self.boundary_types[lo_side]
+        hi_type = self.boundary_types[hi_side]
+
+        # True two-sided periodic wrap for the all-periodic axis.
+        if lo_pad > 0 and hi_pad > 0 and lo_type == 'periodic' and hi_type == 'periodic':
+            lo_wrap = result.narrow(dim, result.size(dim) - lo_pad, lo_pad)
+            hi_wrap = result.narrow(dim, 0, hi_pad)
+            return torch.cat([lo_wrap, result, hi_wrap], dim=dim)
+
+        # Per-side fallback. Apply periodic side(s) first.
+        sides = [(lo_side, lo_type, lo_pad, True), (hi_side, hi_type, hi_pad, False)]
+        sides.sort(key=lambda s: s[1] != 'periodic')
+        for side, bc_type, pad_amt, is_lo in sides:
+            if pad_amt <= 0:
+                continue
+            if bc_type == 'periodic':
+                if is_lo:
+                    wrap = result.narrow(dim, result.size(dim) - pad_amt, pad_amt)
+                    result = torch.cat([wrap, result], dim=dim)
+                else:
+                    wrap = result.narrow(dim, 0, pad_amt)
+                    result = torch.cat([result, wrap], dim=dim)
+            else:
+                if dim == 3:
+                    pad = (pad_amt, 0, 0, 0) if is_lo else (0, pad_amt, 0, 0)
+                else:
+                    pad = (0, 0, pad_amt, 0) if is_lo else (0, 0, 0, pad_amt)
+                result = self._pad_side(result, bc_type, self.boundary_values[side], pad)
+        return result
+
     def pad_signal(self, signal):
         """
         Apply padding to a signal based on boundary conditions
-        
+
         Args:
             signal: Input tensor of shape [batch, channel, height, width] or [height, width]
-            
+
         Returns:
             Padded tensor with appropriate boundary conditions
         """
         # Store original shape to restore later
-        original_shape = signal.shape
-        original_ndim = len(original_shape)
-        
+        original_ndim = signal.ndim
+
         # Convert to 4D if input is 2D
         if original_ndim == 2:
             signal = signal.unsqueeze(0).unsqueeze(0)
-        
-        # Start with the signal itself
+
         result = signal
-        
-        # Apply padding for each side independently
-        # Left boundary
-        if self.pad_left > 0:
-            bc_type = self.boundary_types['left']
-            bc_value = self.boundary_values['left']
-            
-            if bc_type == 'dirichlet':
-                pad = (self.pad_left, 0, 0, 0)
-                result = F.pad(result, pad, mode='constant', value=bc_value)
-            elif bc_type in ['neumann', 'outflow']:
-                pad = (self.pad_left, 0, 0, 0)
-                result = F.pad(result, pad, mode='replicate')
-            elif bc_type == 'periodic':
-                # For periodic, we need to pull from the right side
-                left_padding = result[:, :, :, -self.pad_left:]
-                result = torch.cat([left_padding, result], dim=3)
-            elif bc_type == 'symmetric':
-                pad = (self.pad_left, 0, 0, 0)
-                result = F.pad(result, pad, mode='reflect')
-        
-        # Right boundary
-        if self.pad_right > 0:
-            bc_type = self.boundary_types['right']
-            bc_value = self.boundary_values['right']
-            
-            if bc_type == 'dirichlet':
-                pad = (0, self.pad_right, 0, 0)
-                result = F.pad(result, pad, mode='constant', value=bc_value)
-            elif bc_type in ['neumann', 'outflow']:
-                pad = (0, self.pad_right, 0, 0)
-                result = F.pad(result, pad, mode='replicate')
-            elif bc_type == 'periodic':
-                # For periodic, we need to pull from the left side
-                right_padding = result[:, :, :, :self.pad_right]
-                result = torch.cat([result, right_padding], dim=3)
-            elif bc_type == 'symmetric':
-                pad = (0, self.pad_right, 0, 0)
-                result = F.pad(result, pad, mode='reflect')
-        
-        # Top boundary
-        if self.pad_top > 0:
-            bc_type = self.boundary_types['top']
-            bc_value = self.boundary_values['top']
-            
-            if bc_type == 'dirichlet':
-                pad = (0, 0, self.pad_top, 0)
-                result = F.pad(result, pad, mode='constant', value=bc_value)
-            elif bc_type in ['neumann', 'outflow']:
-                pad = (0, 0, self.pad_top, 0)
-                result = F.pad(result, pad, mode='replicate')
-            elif bc_type == 'periodic':
-                # For periodic, we need to pull from the bottom
-                top_padding = result[:, :, -self.pad_top:, :]
-                result = torch.cat([top_padding, result], dim=2)
-            elif bc_type == 'symmetric':
-                pad = (0, 0, self.pad_top, 0)
-                result = F.pad(result, pad, mode='reflect')
-        
-        # Bottom boundary
-        if self.pad_bottom > 0:
-            bc_type = self.boundary_types['bottom']
-            bc_value = self.boundary_values['bottom']
-            
-            if bc_type == 'dirichlet':
-                pad = (0, 0, 0, self.pad_bottom)
-                result = F.pad(result, pad, mode='constant', value=bc_value)
-            elif bc_type in ['neumann', 'outflow']:
-                pad = (0, 0, 0, self.pad_bottom)
-                result = F.pad(result, pad, mode='replicate')
-            elif bc_type == 'periodic':
-                # For periodic, we need to pull from the top
-                bottom_padding = result[:, :, :self.pad_bottom, :]
-                result = torch.cat([result, bottom_padding], dim=2)
-            elif bc_type == 'symmetric':
-                pad = (0, 0, 0, self.pad_bottom)
-                result = F.pad(result, pad, mode='reflect')
-        
+
+        # Width axis (dim=3): 'left'/'right'.  Height axis (dim=2): 'top'/'bottom'.
+        result = self._pad_axis(result, 'left', 'right', self.pad_left, self.pad_right, dim=3)
+        result = self._pad_axis(result, 'top', 'bottom', self.pad_top, self.pad_bottom, dim=2)
+
         # Restore original shape dimension
         if original_ndim == 2:
             result = result.squeeze(0).squeeze(0)
-            
+
         return result
     
     def apply_convolution(self, signal, kernel):
